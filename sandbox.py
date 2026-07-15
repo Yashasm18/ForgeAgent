@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import ast
 from pathlib import Path
 
 ALLOWED_IMPORTS = {"collections", "csv", "datetime", "json", "math", "re", "statistics", "string"}
@@ -39,7 +40,30 @@ class SandboxError(RuntimeError):
     pass
 
 
+def policy_violations(source: str) -> list[str]:
+    """Return static policy violations before a candidate reaches execution."""
+    try:
+        tree = ast.parse(source, mode="exec")
+    except SyntaxError as exc:
+        return [f"invalid syntax: {exc.msg}"]
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            modules = [item.name.split(".")[0] for item in node.names] if isinstance(node, ast.Import) else [(node.module or "").split(".")[0]]
+            for module in modules:
+                if module not in ALLOWED_IMPORTS:
+                    violations.append(f"disallowed import: {module}")
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"open", "exec", "eval", "compile", "__import__"}:
+            violations.append(f"disallowed operation: {node.func.id}")
+    if not any(isinstance(item, ast.FunctionDef) and item.name == "run" for item in tree.body):
+        violations.append("missing run(payload) function")
+    return sorted(set(violations))
+
+
 def execute(source: str, payload: object, timeout: float = 2.0) -> object:
+    violations = policy_violations(source)
+    if violations:
+        raise SandboxError("; ".join(violations))
     with tempfile.TemporaryDirectory(prefix="forgeagent-") as workdir:
         try:
             result = subprocess.run(

@@ -13,8 +13,8 @@ PAGE = r'''<!doctype html><html><head><meta charset="utf-8"><title>ForgeAgent �
 <body><main><section class="hero"><div><div class="eyebrow">FORGEAGENT / VERIFIED SKILL MEMORY</div><h1>Trust is forged,<br>not assumed.</h1><p>GPT‑5.6 may propose a capability. Only isolated execution and reproducible evidence allow it to become an agent's permanent memory.</p></div><div class="seal">VERIFIED<br>BEFORE<br>REUSE</div></section>
 <section class="grid"><div class="metric"><b id="count">—</b><span>trusted skills in memory</span></div><div class="metric"><b id="reuses">—</b><span>verified reuses</span></div><div class="metric"><b id="tests">—</b><span>recorded proof cases</span></div></section>
 <section class="panel"><h2><span>01 /</span> The forge protocol</h2><div class="flow"><div class="step"><b>Capability gap</b>Agent names what it cannot yet do.</div><div class="step"><b>GPT‑5.6 proposal</b>Code and edge-case tests are proposed.</div><div class="step"><b>Policy gate</b>Dangerous imports and operations are blocked.</div><div class="step ok"><b>Isolated proof</b>Every test must pass in a fresh process.</div><div class="step ok"><b>Reusable memory</b>Evidence-backed skills compound over time.</div></div></section>
-<section class="panel" style="margin-top:14px"><h2><span>02 /</span> Trust ledger</h2><div class="tools" id="tools"><div class="empty">Loading verified memory…</div></div></section></main>
-<script>async function load(){let r=await fetch('/api/tools'),d=await r.json();let t=d.tools||[];count.textContent=t.length;reuses.textContent=t.reduce((a,x)=>a+(x.reuse_count||0),0);tests.textContent=t.reduce((a,x)=>a+(x.tests||[]).length,0);tools.innerHTML=t.length?t.map(x=>`<article class="tool"><div><code>${x.name}</code><p>${x.description}</p><p>Provenance: ${x.provenance||'legacy demo'} · ${x.tests?.length||1} proof case(s)</p></div><span class="badge">TRUSTED</span></article>`).join(''):'<div class="empty">No tools have earned trust yet. Forge your first capability.</div>'}load();setInterval(load,3500);</script></body></html>'''
+<section class="panel" style="margin-top:14px"><h2><span>02 /</span> Trust ledger</h2><div class="tools" id="tools"><div class="empty">Loading verified memory…</div></div></section><section class="panel" style="margin-top:14px"><h2><span>03 /</span> Evidence trail</h2><div class="tools" id="events"><div class="empty">Loading decisions…</div></div></section></main>
+<script>async function load(){let [r,e]=await Promise.all([fetch('/api/tools'),fetch('/api/events')]),d=await r.json(),a=await e.json(),t=d.tools||[];count.textContent=t.length;reuses.textContent=t.reduce((a,x)=>a+(x.reuse_count||0),0);tests.textContent=t.reduce((a,x)=>a+(x.tests||[]).length,0);tools.innerHTML=t.length?t.map(x=>`<article class="tool"><div><code>${x.name}</code><p>${x.description}</p><p>Provenance: ${x.provenance||'legacy demo'} · ${x.tests?.length||1} proof case(s)</p></div><span class="badge">TRUSTED</span></article>`).join(''):'<div class="empty">No tools have earned trust yet. Forge your first capability.</div>';events.innerHTML=(a.events||[]).map(x=>`<article class="tool"><div><code>${x.event}</code><p>${x.capability} — ${x.detail}</p><p>${x.created_at}</p></div><span class="badge">${x.outcome.toUpperCase()}</span></article>`).join('')||'<div class="empty">No decisions recorded yet.</div>'}load();setInterval(load,3500);</script></body></html>'''
 
 
 def serve(registry_path: str | Path = "data/tool_registry.json", port: int = 8787) -> None:
@@ -28,6 +28,13 @@ def serve(registry_path: str | Path = "data/tool_registry.json", port: int = 878
                 except json.JSONDecodeError:
                     tools = []
                 body, content_type = json.dumps({"tools": tools}).encode(), "application/json"
+            elif self.path == "/api/events":
+                audit_path = path.parent / "audit_log.jsonl"
+                try:
+                    rows = [json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+                except (FileNotFoundError, json.JSONDecodeError):
+                    rows = []
+                body, content_type = json.dumps({"events": list(reversed(rows[-12:]))}).encode(), "application/json"
             elif self.path == "/":
                 body, content_type = PAGE.encode(), "text/html; charset=utf-8"
             else:

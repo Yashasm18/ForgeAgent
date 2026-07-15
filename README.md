@@ -12,8 +12,8 @@ policy-check → isolate → prove → persist → reuse**.
 
 An agent can now get better over time without quietly accumulating unverified
 code. Every saved skill has source, deterministic test evidence, provenance,
-and reuse history. Broken or policy-violating candidates are rejected before
-they can enter memory.
+reuse history, and an append-only decision record. Broken or policy-violating
+candidates are rejected before they can enter memory.
 
 ## Quick demo (no API key)
 
@@ -27,6 +27,10 @@ Open `http://127.0.0.1:8787` to see the **Forge Ledger**. The first demo run
 creates two curated offline skills; the second proves that verified memory is
 reused. The curated mode is intentionally labelled as a recording fallback—it
 does not claim to be a live model call.
+
+The dashboard now also shows the **Evidence Trail**: every capability request,
+policy rejection, verification result, trusted reuse, and execution is stored
+in `data/audit_log.jsonl`.
 
 ## Live GPT-5.6 forge
 
@@ -54,8 +58,9 @@ python3 -m unittest discover -s tests -v
 This is defense in depth for a hackathon project, not hardened containment for
 hostile code. Generated tools run in a fresh subprocess with a timeout, a
 temporary working directory, a minimal environment, a restricted builtins set,
-and an import/operation policy. Production deployment would require stronger
-OS/container isolation, network controls, and human review policies.
+and an import/operation policy. The policy gate is exposed separately before
+execution and every decision is recorded. Production deployment would require
+stronger OS/container isolation, network controls, and human review policies.
 
 ## OpenAI Build Week evidence
 

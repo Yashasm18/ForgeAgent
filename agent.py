@@ -5,9 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
+from audit import AuditLog
 from generator import ProposalGenerator, ToolProposal
 from registry import Tool, ToolRegistry
-from sandbox import SandboxError, execute
+from sandbox import SandboxError, execute, policy_violations
 
 
 @dataclass(frozen=True)
@@ -56,14 +57,16 @@ def run(payload):
 
 
 class ForgeAgent:
-    def __init__(self, registry: ToolRegistry, emit: Callable[[str], None] = print, generator: ProposalGenerator | None = None):
+    def __init__(self, registry: ToolRegistry, emit: Callable[[str], None] = print, generator: ProposalGenerator | None = None, audit: AuditLog | None = None):
         self.registry, self.emit, self.generator = registry, emit, generator
+        self.audit = audit or AuditLog(registry.path.parent / "audit_log.jsonl")
 
     def forge(self, capability: str, payload: object) -> object:
         """Create, verify, persist, and run a model-proposed capability."""
         if not self.generator:
             raise RuntimeError("No GPT-5.6 generator configured. Set OPENAI_API_KEY and use live mode.")
         self.emit(f"\nREQUEST  {capability}")
+        self.audit.record("capability_requested", capability, "Agent identified a capability gap", "pending")
         self.emit("PLAN     Asking GPT-5.6 for a constrained tool and edge-case tests...")
         proposal = self.generator.propose(capability, payload)
         return self._verify_and_run(proposal, payload)
@@ -73,8 +76,15 @@ class ForgeAgent:
         if tool:
             self.emit(f"REUSE ✓  Verified tool already exists: {tool.name}")
             tool = self.registry.mark_reused(tool.name)
+            self.audit.record("tool_reused", tool.name, f"Reuse count is now {tool.reuse_count}", "trusted")
         else:
             self.emit(f"FORGE    Candidate skill: {proposal.name}")
+            findings = policy_violations(proposal.source)
+            if findings:
+                detail = "; ".join(findings)
+                self.audit.record("policy_rejected", proposal.name, detail, "rejected")
+                self.emit(f"REJECT ✗  Policy gate blocked candidate: {detail}")
+                raise SandboxError(detail)
             self.emit(f"VERIFY   Running {len(proposal.tests)} deterministic tests in isolated sandbox...")
             try:
                 for test_input, expected_output in proposal.tests:
@@ -82,6 +92,7 @@ class ForgeAgent:
                     if actual != expected_output:
                         raise RuntimeError("test output did not match the expected output")
             except (SandboxError, RuntimeError) as exc:
+                self.audit.record("verification_rejected", proposal.name, str(exc), "rejected")
                 self.emit(f"REJECT ✗  {proposal.name} never entered memory: {exc}")
                 raise
             test_input, expected_output = proposal.tests[0]
@@ -92,9 +103,11 @@ class ForgeAgent:
                 provenance=proposal.provenance,
             )
             self.registry.register(tool)
+            self.audit.record("tool_trusted", tool.name, f"{len(proposal.tests)} deterministic proof cases passed; {proposal.provenance}", "trusted")
             self.emit(f"TRUST ✓  Tests passed. REGISTER ✓  {tool.name} is now reusable memory.")
         self.emit(f"RUN      Executing trusted skill: {tool.name}")
         answer = execute(tool.source, payload)
+        self.audit.record("tool_executed", tool.name, "Trusted tool executed on task payload", "completed")
         self.emit("DONE     Result produced by a verified capability.")
         return answer
 
@@ -107,6 +120,7 @@ class ForgeAgent:
         if tool:
             self.emit(f"REUSE ✓  Found verified tool: {tool.name}")
             tool = self.registry.mark_reused(tool.name)
+            self.audit.record("tool_reused", tool.name, f"Reuse count is now {tool.reuse_count}", "trusted")
         else:
             self.emit(f"GAP    I need '{blueprint.name}', and I do not have it. I will build it.")
             self.emit(f"BUILD  Generated executable tool: {blueprint.name}")
@@ -121,8 +135,10 @@ class ForgeAgent:
                 raise RuntimeError("Generated tool failed verification")
             tool = Tool(blueprint.name, blueprint.description, blueprint.source, blueprint.test_input, blueprint.expected_output, self.registry.timestamp())
             self.registry.register(tool)
+            self.audit.record("tool_trusted", tool.name, "Curated offline demonstration proof passed", "trusted")
             self.emit(f"VERIFY ✓  Sample test passed. REGISTER ✓  Toolkit now has {len(self.registry.list())} verified tool(s).")
         self.emit(f"RUN    Executing {tool.name} on task input...")
         answer = execute(tool.source, payload)
+        self.audit.record("tool_executed", tool.name, "Trusted tool executed on task payload", "completed")
         self.emit("DONE   Result produced by verified tool.")
         return answer
