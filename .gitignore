@@ -1,5 +1,6 @@
 __pycache__/
 data/tool_registry.json
+data/capability_graph.json
 data/*.jsonl
 .env
 .env.*

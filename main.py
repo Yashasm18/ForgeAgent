@@ -8,10 +8,13 @@ from pathlib import Path
 
 from agent import ForgeAgent
 from benchmark import run_safety_benchmark
+from capability_graph import CapabilityGraph
+from comparison import compare
 from dashboard import serve
 from demo_tasks import DEMO_TASKS, SHOWCASE_TASKS
 from generator import GPT56Generator, GeneratorError
 from registry import ToolRegistry
+from workflows import INCIDENT_RECOVERY_PLAN
 
 
 def main() -> None:
@@ -19,6 +22,10 @@ def main() -> None:
     parser.add_argument("--demo", action="store_true", help="Run the curated build -> reuse -> build sequence")
     parser.add_argument("--showcase", action="store_true", help="Run the judge-facing PII -> triage -> reuse workflow")
     parser.add_argument("--benchmark", action="store_true", help="Run ForgeAgent's repeatable trust-gate benchmark")
+    parser.add_argument("--autonomy-demo", action="store_true", help="Run a dependency-aware task recovery plan")
+    parser.add_argument("--compare", action="store_true", help="Compare stateless execution with ForgeAgent memory")
+    parser.add_argument("--graph", action="store_true", help="Export ForgeAgent's task-to-capability graph as JSON")
+    parser.add_argument("--autonomous-task", help="Use GPT-5.6 to plan, forge, repair, and complete an unknown user task")
     parser.add_argument("--reset", action="store_true", help="Remove the demo registry before running")
     parser.add_argument("--list-tools", action="store_true", help="List registered verified tools")
     parser.add_argument("--task", help="One supported task")
@@ -30,8 +37,10 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8787, help="Dashboard port (default: 8787)")
     args = parser.parse_args()
     registry_path = Path("data/tool_registry.json")
-    if args.reset and registry_path.exists():
-        registry_path.unlink()
+    if args.reset:
+        for artifact in (registry_path, registry_path.parent / "audit_log.jsonl", registry_path.parent / "capability_graph.json"):
+            if artifact.exists():
+                artifact.unlink()
     registry = ToolRegistry(registry_path)
     if args.serve:
         serve(registry_path, args.port)
@@ -41,6 +50,12 @@ def main() -> None:
         return
     if args.benchmark:
         print(json.dumps(run_safety_benchmark(), indent=2))
+        return
+    if args.compare:
+        print(json.dumps(compare(INCIDENT_RECOVERY_PLAN), indent=2))
+        return
+    if args.graph:
+        print(json.dumps(CapabilityGraph(registry_path.parent / "capability_graph.json").export(), indent=2))
         return
     agent = ForgeAgent(registry)
     if args.demo:
@@ -53,6 +68,10 @@ def main() -> None:
         for task, payload in SHOWCASE_TASKS:
             print(json.dumps(agent.complete(task, payload), indent=2))
         return
+    if args.autonomy_demo:
+        print("═" * 68 + "\n FORGEAGENT AUTONOMY  |  task gap -> plan -> learn -> reuse\n" + "═" * 68)
+        print(json.dumps(agent.execute_plan("Securely analyze a support incident", INCIDENT_RECOVERY_PLAN), indent=2))
+        return
     if args.task and args.text is not None:
         print(json.dumps(agent.complete(args.task, {"text": args.text}), indent=2))
         return
@@ -61,6 +80,14 @@ def main() -> None:
             payload = json.loads(args.payload)
             live_agent = ForgeAgent(registry, generator=GPT56Generator(model=args.model))
             print(json.dumps(live_agent.forge(args.forge, payload), indent=2))
+        except (json.JSONDecodeError, GeneratorError, RuntimeError) as exc:
+            parser.error(str(exc))
+        return
+    if args.autonomous_task and args.payload:
+        try:
+            payload = json.loads(args.payload)
+            live_agent = ForgeAgent(registry, generator=GPT56Generator(model=args.model))
+            print(json.dumps(live_agent.execute_user_task(args.autonomous_task, payload), indent=2))
         except (json.JSONDecodeError, GeneratorError, RuntimeError) as exc:
             parser.error(str(exc))
         return

@@ -23,6 +23,9 @@ python3 main.py --demo
 python3 main.py --serve
 python3 main.py --benchmark
 python3 main.py --showcase --reset
+python3 main.py --autonomy-demo --reset
+python3 main.py --autonomy-demo
+python3 main.py --compare
 ```
 
 Open `http://127.0.0.1:8787` to see the **Forge Ledger**. The first demo run
@@ -39,6 +42,34 @@ safe code, filesystem access, network access, dynamic execution, and a broken
 tool contract. `--showcase` is the recording-ready workflow: redact sensitive
 support data, explain customer risk, and reuse those proven capabilities on the
 next pass.
+
+## Capability Graph and task recovery
+
+ForgeAgent's capability graph is its native memory model. It maps user tasks
+to capability gaps, verified skill versions, proof evidence, dependencies,
+repairs, supersessions, and rollbacks. It is not a generic codebase graph: it
+answers **why this agent can safely perform this task now**.
+
+`--autonomy-demo` runs a dependent incident workflow. Each step first looks
+for an active trusted skill. A gap triggers forging; a failed proposal triggers
+up to two repair attempts; only a repaired candidate that passes every test is
+promoted. Verified replacement versions retain the older version for rollback.
+
+`--compare` executes the same multi-step workflow twice as a stateless agent
+and twice with ForgeAgent's persistent memory, reporting new-skill creation,
+reuse, and elapsed time.
+
+With an OpenAI API key, ForgeAgent can also receive an unknown user task and
+ask GPT-5.6 to produce the dependency plan itself:
+
+```bash
+python3 main.py --autonomous-task "Redact this incident, assess its customer risk, and summarize recurring terms" \
+  --payload '{"text":"Ava at ava@example.com cannot access the dashboard and may cancel."}'
+```
+
+For each planned step, a missing capability triggers code-and-test generation;
+a failed candidate triggers repair attempts; an accepted repair creates a new
+version while preserving the earlier trusted version for rollback.
 
 ## Live GPT-5.6 forge
 

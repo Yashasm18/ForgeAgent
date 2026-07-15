@@ -41,6 +41,12 @@ No filesystem, network, subprocesses, reflection, eval, exec, globals, or import
 collections,csv,datetime,json,math,re,statistics,string.
 Use at least two meaningful edge-case tests. Keep source under 120 lines."""
 
+PLAN_PROMPT = """You are ForgeAgent's capability planner. Return JSON only:
+{"steps":[{"id":"short_id","task":"specific capability request","payload":{},"depends_on":[]}]}
+Decompose the user request into the minimum dependency-ordered, independently
+verifiable capabilities. Do not invent external side effects. Every step payload
+must be JSON-compatible. Use at most five steps."""
+
 
 class GPT56Generator:
     """Minimal stdlib client so the project has no framework dependency."""
@@ -52,11 +58,26 @@ class GPT56Generator:
             raise GeneratorError("OPENAI_API_KEY is required for live GPT-5.6 generation")
 
     def propose(self, capability: str, payload: object) -> ToolProposal:
+        text = self._complete(SYSTEM_PROMPT, f"Capability: {capability}\nExample payload: {json.dumps(payload)}")
+        return _parse_proposal(text, f"GPT-5.6 ({self.model})")
+
+    def plan(self, user_task: str, payload: object) -> list[dict[str, object]]:
+        text = self._complete(PLAN_PROMPT, f"User task: {user_task}\nInput: {json.dumps(payload)}")
+        try:
+            data = json.loads(text)
+            steps = data["steps"]
+            if not isinstance(steps, list) or not steps:
+                raise ValueError("empty plan")
+            return steps
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise GeneratorError("GPT-5.6 plan was not valid ForgeAgent JSON") from exc
+
+    def _complete(self, system_prompt: str, user_text: str) -> str:
         request_body = {
             "model": self.model,
             "input": [
-                {"role": "system", "content": [{"type": "input_text", "text": SYSTEM_PROMPT}]},
-                {"role": "user", "content": [{"type": "input_text", "text": f"Capability: {capability}\nExample payload: {json.dumps(payload)}"}]},
+                {"role": "system", "content": [{"type": "input_text", "text": system_prompt}]},
+                {"role": "user", "content": [{"type": "input_text", "text": user_text}]},
             ],
         }
         request = urllib.request.Request(
@@ -75,7 +96,7 @@ class GPT56Generator:
         text = body.get("output_text", "")
         if not text:
             raise GeneratorError("GPT-5.6 returned no text proposal")
-        return _parse_proposal(text, f"GPT-5.6 ({self.model})")
+        return text
 
 
 def _parse_proposal(text: str, provenance: str) -> ToolProposal:
