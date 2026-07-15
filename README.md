@@ -33,6 +33,22 @@ creates two curated offline skills; the second proves that verified memory is
 reused. The curated mode is intentionally labelled as a recording fallback—it
 does not claim to be a live model call.
 
+## Hosted judge demo
+
+`demo/` is a no-install, static Forge Ledger designed for the Devpost
+**judge-testing** field. It contains a preloaded autonomy run, capability
+graph, repair/version evidence, safety result, and baseline comparison without
+requiring an API key.
+
+After GitHub Pages is enabled for this repository, use:
+
+```text
+https://yashasm18.github.io/ForageAgent/
+```
+
+The Pages workflow deploys `demo/` whenever it changes. The interactive local
+ledger remains available through `python3 main.py --serve`.
+
 The dashboard now also shows the **Evidence Trail**: every capability request,
 policy rejection, verification result, trusted reuse, and execution is stored
 in `data/audit_log.jsonl`.
