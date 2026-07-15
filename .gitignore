@@ -1,2 +1,5 @@
 __pycache__/
 data/tool_registry.json
+.env
+.env.*
+*.key
