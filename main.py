@@ -7,8 +7,9 @@ import json
 from pathlib import Path
 
 from agent import ForgeAgent
+from benchmark import run_safety_benchmark
 from dashboard import serve
-from demo_tasks import DEMO_TASKS
+from demo_tasks import DEMO_TASKS, SHOWCASE_TASKS
 from generator import GPT56Generator, GeneratorError
 from registry import ToolRegistry
 
@@ -16,6 +17,8 @@ from registry import ToolRegistry
 def main() -> None:
     parser = argparse.ArgumentParser(description="ForgeAgent: self-extending, test-before-trust demo")
     parser.add_argument("--demo", action="store_true", help="Run the curated build -> reuse -> build sequence")
+    parser.add_argument("--showcase", action="store_true", help="Run the judge-facing PII -> triage -> reuse workflow")
+    parser.add_argument("--benchmark", action="store_true", help="Run ForgeAgent's repeatable trust-gate benchmark")
     parser.add_argument("--reset", action="store_true", help="Remove the demo registry before running")
     parser.add_argument("--list-tools", action="store_true", help="List registered verified tools")
     parser.add_argument("--task", help="One supported task")
@@ -36,10 +39,18 @@ def main() -> None:
     if args.list_tools:
         print(json.dumps([{ "name": t.name, "description": t.description, "created_at": t.created_at } for t in registry.list()], indent=2))
         return
+    if args.benchmark:
+        print(json.dumps(run_safety_benchmark(), indent=2))
+        return
     agent = ForgeAgent(registry)
     if args.demo:
         print("═" * 68 + "\n FORGEAGENT  |  self-extending tools, verified before trust\n" + "═" * 68)
         for task, payload in DEMO_TASKS:
+            print(json.dumps(agent.complete(task, payload), indent=2))
+        return
+    if args.showcase:
+        print("═" * 68 + "\n FORGEAGENT SHOWCASE  |  privacy -> risk -> trusted reuse\n" + "═" * 68)
+        for task, payload in SHOWCASE_TASKS:
             print(json.dumps(agent.complete(task, payload), indent=2))
         return
     if args.task and args.text is not None:

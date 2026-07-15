@@ -53,6 +53,40 @@ def run(payload):
         [{"domain": "openai.com", "count": 2}, {"domain": "example.org", "count": 1}],
         lambda task: any(word in task.lower() for word in ("email domain", "email domains", "domain summary")),
     ),
+    ToolBlueprint(
+        "pii_redactor",
+        "Redact email addresses, phone numbers, and card-like number sequences from text.",
+        '''import re
+def run(payload):
+    text = payload["text"]
+    text = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "[EMAIL]", text)
+    text = re.sub(r"(?<!\\w)(?:\\+?\\d[ -]?){8,15}(?!\\w)", "[PHONE]", text)
+    text = re.sub(r"\\b(?:\\d[ -]?){13,19}\\b", "[CARD]", text)
+    return text
+''',
+        {"text": "Email ava@example.com or call +1 415 555 0112."},
+        "Email [EMAIL] or call [PHONE].",
+        lambda task: any(phrase in task.lower() for phrase in ("redact pii", "redact personal", "remove personal")),
+    ),
+    ToolBlueprint(
+        "support_risk_triage",
+        "Classify a support ticket's operational risk with explainable keyword signals.",
+        '''def run(payload):
+    text = payload["text"].lower()
+    signals = []
+    if any(word in text for word in ("breach", "security", "leak", "unauthorized")):
+        signals.append("security")
+    if any(word in text for word in ("outage", "down", "cannot access", "broken")):
+        signals.append("service")
+    if any(word in text for word in ("cancel", "churn", "competitor", "refund")):
+        signals.append("retention")
+    priority = "critical" if "security" in signals else "high" if "service" in signals else "medium" if "retention" in signals else "low"
+    return {"priority": priority, "signals": signals}
+''',
+        {"text": "Our dashboard is down and customers cannot access their reports."},
+        {"priority": "high", "signals": ["service"]},
+        lambda task: any(phrase in task.lower() for phrase in ("triage support", "support risk", "churn risk")),
+    ),
 )
 
 

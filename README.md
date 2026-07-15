@@ -21,6 +21,8 @@ candidates are rejected before they can enter memory.
 python3 main.py --demo --reset
 python3 main.py --demo
 python3 main.py --serve
+python3 main.py --benchmark
+python3 main.py --showcase --reset
 ```
 
 Open `http://127.0.0.1:8787` to see the **Forge Ledger**. The first demo run
@@ -31,6 +33,12 @@ does not claim to be a live model call.
 The dashboard now also shows the **Evidence Trail**: every capability request,
 policy rejection, verification result, trusted reuse, and execution is stored
 in `data/audit_log.jsonl`.
+
+`--benchmark` evaluates the trust gate against five representative cases:
+safe code, filesystem access, network access, dynamic execution, and a broken
+tool contract. `--showcase` is the recording-ready workflow: redact sensitive
+support data, explain customer risk, and reuse those proven capabilities on the
+next pass.
 
 ## Live GPT-5.6 forge
 
