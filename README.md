@@ -3,6 +3,12 @@
 > GPT-5.6 may propose a new agent capability. ForgeAgent decides whether it has
 > earned trust.
 
+## Live judge demo
+
+**[Open the Forge Ledger →](https://yashasm18.github.io/ForageAgent/)** — a
+no-install, preloaded autonomy run with the capability graph, trust ledger,
+repair/version evidence, safety benchmark, and baseline comparison.
+
 Long-running agents need to acquire small capabilities as work changes, but
 blindly executing generated code creates a memory full of unproven behavior.
 ForgeAgent turns each capability gap into a disciplined loop: **propose →
@@ -40,7 +46,7 @@ does not claim to be a live model call.
 graph, repair/version evidence, safety result, and baseline comparison without
 requiring an API key.
 
-After GitHub Pages is enabled for this repository, use:
+Use the hosted demo here:
 
 ```text
 https://yashasm18.github.io/ForageAgent/
