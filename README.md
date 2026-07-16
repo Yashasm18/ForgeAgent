@@ -6,7 +6,8 @@
 ## Live judge demo
 
 **[Open the Forge Ledger →](https://yashasm18.github.io/ForageAgent/)** — a
-no-install, preloaded autonomy run with the capability graph, trust ledger,
+no-install judge experience with both a preloaded autonomy run and an
+interactive browser capability run, plus the capability graph, trust ledger,
 repair/version evidence, safety benchmark, and baseline comparison.
 
 Long-running agents need to acquire small capabilities as work changes, but
@@ -42,9 +43,10 @@ does not claim to be a live model call.
 ## Hosted judge demo
 
 `demo/` is a no-install, static Forge Ledger designed for the Devpost
-**judge-testing** field. It contains a preloaded autonomy run, capability
-graph, repair/version evidence, safety result, and baseline comparison without
-requiring an API key.
+**judge-testing** field. It contains a preloaded autonomy run for immediate
+review plus an interactive, deterministic browser run: paste an incident and
+execute PII redaction, risk triage, and feedback-term extraction. Neither
+requires an API key.
 
 Use the hosted demo here:
 
@@ -52,8 +54,8 @@ Use the hosted demo here:
 https://yashasm18.github.io/ForageAgent/
 ```
 
-The Pages workflow deploys `demo/` whenever it changes. The interactive local
-ledger remains available through `python3 main.py --serve`.
+GitHub Pages serves the static `demo/` directory from the `gh-pages` branch.
+The full local ledger remains available through `python3 main.py --serve`.
 
 The dashboard now also shows the **Evidence Trail**: every capability request,
 policy rejection, verification result, trusted reuse, and execution is stored
