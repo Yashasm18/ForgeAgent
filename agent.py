@@ -66,17 +66,19 @@ def run(payload):
     ),
     ToolBlueprint(
         "pii_redactor",
-        "Redact email addresses, phone numbers, and card-like number sequences from text.",
+        "Redact PII and explicitly labelled secrets such as passcodes, API keys, tokens, and secret messages from text.",
         '''import re
 def run(payload):
     text = payload["text"]
     text = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "[EMAIL]", text)
     text = re.sub(r"(?<!\\w)(?:\\+?\\d[ -]?){8,15}(?!\\w)", "[PHONE]", text)
     text = re.sub(r"\\b(?:\\d[ -]?){13,19}\\b", "[CARD]", text)
+    text = re.sub(r"\\b(secret\\s*(?:code|key)|pass(?:word|code)|otp|pin|api[ _-]?key|access[ _-]?token)\\s*(?:is|:|=)?\\s*[A-Za-z0-9_-]{4,}\\b", r"\\1 [SECRET]", text, flags=re.IGNORECASE)
+    text = re.sub(r"\\b(secret\\s*message|confidential\\s*message)\\s*(?:is|:|=)\\s*[^.\\n]+", r"\\1: [SECRET_MESSAGE]", text, flags=re.IGNORECASE)
     return text
 ''',
-        {"text": "Email ava@example.com or call +1 415 555 0112."},
-        "Email [EMAIL] or call [PHONE].",
+        {"text": "Email ava@example.com, call +1 415 555 0112, secret code 89789. Secret message is: launch at dawn."},
+        "Email [EMAIL], call [PHONE], secret code [SECRET]. Secret message: [SECRET_MESSAGE].",
         lambda task: any(phrase in task.lower() for phrase in ("redact pii", "redact personal", "remove personal")),
     ),
     ToolBlueprint(

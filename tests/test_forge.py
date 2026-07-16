@@ -3,8 +3,10 @@ import unittest
 from pathlib import Path
 
 from agent import ForgeAgent
+from agent import BLUEPRINTS
 from generator import ToolProposal
 from registry import ToolRegistry
+from sandbox import execute
 
 
 class StaticGenerator:
@@ -41,6 +43,18 @@ GOOD = ToolProposal(
 
 
 class ForgeTests(unittest.TestCase):
+    def test_pii_redactor_removes_explicitly_labelled_secrets(self):
+        blueprint = next(item for item in BLUEPRINTS if item.name == "pii_redactor")
+        output = execute(
+            blueprint.source,
+            {"text": "Email yashas@example.com; secret code 89789. Secret message is: launch at dawn. API key: sk-demo-secret."},
+        )
+        self.assertNotIn("89789", output)
+        self.assertNotIn("launch at dawn", output)
+        self.assertNotIn("sk-demo-secret", output)
+        self.assertIn("[SECRET]", output)
+        self.assertIn("[SECRET_MESSAGE]", output)
+
     def test_verified_skill_is_persisted_and_reused(self):
         with tempfile.TemporaryDirectory() as directory:
             registry = ToolRegistry(Path(directory) / "skills.json")
