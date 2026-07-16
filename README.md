@@ -6,9 +6,9 @@
 ## Live judge demo
 
 **[Open the Forge Ledger →](https://yashasm18.github.io/ForageAgent/)** — a
-no-install judge experience with both a preloaded autonomy run and an
-interactive browser capability run, plus the capability graph, trust ledger,
-repair/version evidence, safety benchmark, and baseline comparison.
+no-install judge experience with a preloaded autonomy run, an interactive
+browser capability run, and a **Forge Challenge** that demonstrates rejection,
+repair, verification, lineage, and rollback under judge-selected failures.
 
 Long-running agents need to acquire small capabilities as work changes, but
 blindly executing generated code creates a memory full of unproven behavior.
@@ -45,8 +45,10 @@ does not claim to be a live model call.
 `demo/` is a no-install, static Forge Ledger designed for the Devpost
 **judge-testing** field. It contains a preloaded autonomy run for immediate
 review plus an interactive, deterministic browser run: paste an incident and
-execute PII redaction, risk triage, and feedback-term extraction. Neither
-requires an API key.
+execute PII redaction, risk triage, and feedback-term extraction. Its Forge
+Challenge additionally lets reviewers inject broken, unsafe, contract-violating,
+or regressing candidates and watch the trust ledger repair or roll them back.
+Neither requires an API key.
 
 Use the hosted demo here:
 
