@@ -10,6 +10,11 @@ no-install judge experience with a preloaded autonomy run, an interactive
 browser capability run, and a **Forge Challenge** that demonstrates rejection,
 repair, verification, lineage, and rollback under judge-selected failures.
 
+The hosted experience also includes **ForageGraph** (a clickable,
+time-replayable capability graph) and **Mission Control**: curated key-free
+skill forging, browser-memory counters, promotion modes, an evaluation arena,
+and downloadable audit receipts.
+
 Long-running agents need to acquire small capabilities as work changes, but
 blindly executing generated code creates a memory full of unproven behavior.
 ForgeAgent turns each capability gap into a disciplined loop: **propose →
@@ -49,6 +54,11 @@ execute PII redaction, risk triage, and feedback-term extraction. Its Forge
 Challenge additionally lets reviewers inject broken, unsafe, contract-violating,
 or regressing candidates and watch the trust ledger repair or roll them back.
 Neither requires an API key.
+
+The interactive redactor removes emails, phone numbers, card-like values, and
+explicitly labelled secrets such as secret codes, passwords, OTPs, API keys,
+access tokens, and secret messages. `incident_analysis.py` provides the same
+structured, audit-safe analysis path for arbitrary incident text in Python.
 
 Use the hosted demo here:
 
@@ -132,10 +142,15 @@ stronger OS/container isolation, network controls, and human review policies.
 ForgeAgent is entered in **Developer Tools**. See [HACKATHON_SCOPE.md](HACKATHON_SCOPE.md)
 for the boundary between the earlier prototype and Build Week work.
 
+For an end-to-end architecture, safety, deployment, and judge walkthrough, see
+[MASTER.md](MASTER.md).
+
 Codex accelerated the architecture, safety lifecycle, dashboard, tests, and
-submission materials. GPT-5.6 is used at runtime to propose constrained tool
-code and its deterministic test cases. The demo video will show both the
-successful forge path and a deliberate policy/test rejection.
+submission materials. GPT-5.6 can be used at runtime, with server-side API
+credentials, to propose constrained tool code and deterministic test cases.
+The hosted GitHub Pages demo is deliberately key-free and uses no live model
+call. The demo video will show both the successful forge path and a deliberate
+policy/test rejection.
 
 ## Judge testing path
 
@@ -144,3 +159,4 @@ successful forge path and a deliberate policy/test rejection.
 - Offline proof: `python3 main.py --demo --reset`.
 - Live GPT-5.6 proof: set `OPENAI_API_KEY` and use `--forge` as above.
 - Visual inspection: `python3 main.py --serve`.
+- Verification snapshot: `python3 -m unittest discover -s tests -v` (8 tests).
