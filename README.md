@@ -24,7 +24,7 @@ Measured locally with: python3 main.py --evaluate
 
 ## Live judge demo
 
-**[Open the Forge Ledger →](https://yashasm18.github.io/ForgeAgent/?v=4cd9ee3)** — a
+**[Open the Forge Ledger →](https://yashasm18.github.io/ForgeAgent/?v=ac2ceac)** — a
 no-install walkthrough with the clickable **ForageGraph**, a browser capability
 run, Policy Attack Lab, version lineage, and Production Preflight.
 
