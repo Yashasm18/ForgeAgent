@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "forgeagent": {
+      "command": "python3",
+      "args": ["/absolute/path/to/ForageAgent/mcp_server.py"]
+    }
+  }
+}
