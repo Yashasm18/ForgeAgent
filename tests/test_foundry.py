@@ -38,6 +38,20 @@ class FoundryTests(unittest.TestCase):
             second = foundry.run("Normalize inconsistent date formats in this import log", {"text": "batch=B 2026/7/4"})
             self.assertEqual(second["status"], "reused")
 
+    def test_newly_forged_record_persists_actual_proof_engine_case_count(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            foundry = CapabilityFoundry(root / "registry.json", root=root)
+            outcome = foundry.run("Normalize inconsistent date formats in this import log", {"text": "batch=A 03/07/2026"})
+            actual_cases = sum(
+                result["passed"] and result["category"] not in {"policy", "coverage"}
+                for result in outcome["proof"]["results"]
+            )
+            recorded = foundry.registry.get("date_format_normalizer")
+        self.assertEqual(outcome["status"], "trusted")
+        self.assertEqual(actual_cases, 3)
+        self.assertEqual(recorded.proof_case_count, actual_cases)
+
     def test_unknown_capability_needs_live_generator(self):
         with tempfile.TemporaryDirectory() as directory:
             foundry = CapabilityFoundry(Path(directory) / "registry.json", root=directory)

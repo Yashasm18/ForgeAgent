@@ -160,7 +160,13 @@ class ForgeAgent:
                 self.emit(f"REPAIR   Candidate failed; preparing repair {attempt + 1}/{max_repairs}...")
         raise RuntimeError(f"ForgeAgent exhausted {max_repairs + 1} verified attempts: {failure}")
 
-    def _verify_and_run(self, proposal: ToolProposal, payload: object, force_candidate: bool = False) -> object:
+    def _verify_and_run(
+        self,
+        proposal: ToolProposal,
+        payload: object,
+        force_candidate: bool = False,
+        proof_case_count: int | None = None,
+    ) -> object:
         existing = self.registry.get(proposal.name)
         if existing and not force_candidate:
             tool = existing
@@ -191,6 +197,7 @@ class ForgeAgent:
                 self.registry.timestamp(),
                 tests=[{"input": item, "expected_output": expected} for item, expected in proposal.tests],
                 provenance=proposal.provenance,
+                proof_case_count=proof_case_count if proof_case_count is not None else len(proposal.tests),
             )
             if existing and force_candidate:
                 tool = self.registry.replace(existing, candidate)
@@ -200,7 +207,7 @@ class ForgeAgent:
                 tool = candidate
                 self.registry.register(tool)
             self.graph.record_skill(tool.name, tool.version, tool.dependencies, tool.provenance)
-            self.audit.record("tool_trusted", tool.name, f"{len(proposal.tests)} deterministic proof cases passed; {proposal.provenance}", "trusted")
+            self.audit.record("tool_trusted", tool.name, f"{tool.proof_case_count} recorded proof cases passed; {proposal.provenance}", "trusted")
             self.emit(f"TRUST ✓  Tests passed. REGISTER ✓  {tool.name} is now reusable memory.")
         self.emit(f"RUN      Executing trusted skill: {tool.name}")
         answer = execute(tool.source, payload)
@@ -291,7 +298,11 @@ class ForgeAgent:
             if result != blueprint.expected_output:
                 self.emit("REJECT ✗  Test output did not match expected result; tool was not registered.")
                 raise RuntimeError("Generated tool failed verification")
-            tool = Tool(blueprint.name, blueprint.description, blueprint.source, blueprint.test_input, blueprint.expected_output, self.registry.timestamp())
+            tool = Tool(
+                blueprint.name, blueprint.description, blueprint.source,
+                blueprint.test_input, blueprint.expected_output, self.registry.timestamp(),
+                proof_case_count=1,
+            )
             self.registry.register(tool)
             self.graph.record_skill(tool.name, tool.version, tool.dependencies, "curated offline demonstration")
             self.audit.record("tool_trusted", tool.name, "Curated offline demonstration proof passed", "trusted")

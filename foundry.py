@@ -99,7 +99,16 @@ class CapabilityFoundry:
         # A newly promoted proposal must still replace an existing registry
         # version through the full verification path; never treat a version
         # update as a cache hit.
-        result = agent._verify_and_run(proposal, payload, force_candidate=self.registry.get(proposal.name) is not None)
+        executed_proof_cases = sum(
+            result["passed"] and result["category"] not in {"policy", "coverage"}
+            for result in report["results"]
+        )
+        result = agent._verify_and_run(
+            proposal,
+            payload,
+            force_candidate=self.registry.get(proposal.name) is not None,
+            proof_case_count=executed_proof_cases,
+        )
         self._record_decision(decisions, capability, "governor", "trusted", f"Promoted {record.name}@v{record.version} after policy and proof.")
         return self._outcome(task, capability, "trusted", result, inspection, decisions, threat, report, record)
 

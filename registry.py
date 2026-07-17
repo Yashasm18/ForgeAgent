@@ -23,6 +23,8 @@ class Tool:
     state: str = "active"
     replaces_version: int | None = None
     dependencies: list[str] = field(default_factory=list)
+    # None means this legacy record predates persisted proof evidence counts.
+    proof_case_count: int | None = None
 
 
 class ToolRegistry:

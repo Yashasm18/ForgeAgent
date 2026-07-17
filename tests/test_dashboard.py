@@ -6,7 +6,8 @@ import urllib.request
 from pathlib import Path
 
 from audit import AuditLog
-from dashboard import create_server
+from dashboard import PAGE, create_server
+from registry import Tool, ToolRegistry
 
 
 class DashboardAuditEndpointTests(unittest.TestCase):
@@ -44,6 +45,32 @@ class DashboardAuditEndpointTests(unittest.TestCase):
             set(incremental["events"][0]),
             {"event", "capability", "detail", "outcome", "created_at"},
         )
+
+    def test_tools_endpoint_uses_one_persisted_proof_summary_for_cards_and_total(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            registry_path = root / "tool_registry.json"
+            registry = ToolRegistry(registry_path)
+            registry.register(Tool("dates", "dates", "def run(payload): return payload", {}, {}, registry.timestamp(), proof_case_count=3))
+            registry.register(Tool("traces", "traces", "def run(payload): return payload", {}, {}, registry.timestamp(), proof_case_count=2))
+            server = create_server(registry_path, port=0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                url = f"http://127.0.0.1:{server.server_port}/api/tools"
+                with urllib.request.urlopen(url, timeout=2) as response:
+                    payload = json.load(response)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
+        counts = [tool["proof_case_count"] for tool in payload["tools"]]
+        self.assertEqual(counts, [3, 2])
+        self.assertTrue(payload["proof_summary"]["evidence_available"])
+        self.assertEqual(payload["proof_summary"]["total_case_count"], sum(counts))
+        self.assertIn("d.proof_summary", PAGE)
+        self.assertNotIn("x.tests?.length||1", PAGE)
 
 
 if __name__ == "__main__":
