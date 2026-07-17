@@ -25,7 +25,7 @@ Measured locally with: python3 main.py --evaluate
 ## Live judge demo
 
 **[Open the Forge Ledger →](https://yashasm18.github.io/ForgeAgent/?v=ac2ceac)** — a
-no-install walkthrough with the clickable **ForageGraph**, a browser capability
+no-install walkthrough with the clickable **ForgeGraph**, a browser capability
 run, Policy Attack Lab, version lineage, and Production Preflight.
 
 Why not regenerate a tool every time? This recorded comparison shows the second

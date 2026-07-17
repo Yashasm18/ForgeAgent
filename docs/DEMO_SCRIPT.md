@@ -64,7 +64,7 @@ the actual subprocess and container enforcement.”
 
 ```bash
 claude mcp add-json forgeagent-foundry \
-  '{"type":"stdio","command":"python3","args":["/absolute/path/to/ForageAgent/mcp_server.py"]}' \
+  '{"type":"stdio","command":"python3","args":["/absolute/path/to/ForgeAgent/mcp_server.py"]}' \
   --scope project
 claude mcp list
 ```
