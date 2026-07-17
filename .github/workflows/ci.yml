@@ -42,6 +42,7 @@ jobs:
       - name: Verify production deployment assets
         run: |
           test -f Dockerfile.sandbox
+          test -f Dockerfile.control-plane
           test -f compose.production.yml
           test -f container_runner.py
           test -f governance.py
@@ -54,6 +55,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build rootless sandbox image
         run: docker build --pull -f Dockerfile.sandbox -t forgeagent-sandbox:ci .
+      - name: Build rootless control-plane image
+        run: docker build --pull -f Dockerfile.control-plane -t forgeagent-control-plane:ci .
       - name: Execute a constrained no-egress capability
         run: |
           printf '%s\n%s\n' '"def run(payload): return {\"value\": payload[\"value\"]}"' '{"value":"isolated"}' | \

@@ -1,0 +1,11 @@
+# Local/container control plane. Put TLS, OAuth, and a managed database in
+# front of this service before exposing it outside a trusted network.
+FROM python:3.12-slim
+
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin foundry
+WORKDIR /app
+COPY --chown=10001:10001 *.py /app/
+RUN mkdir -p /app/data && chown -R 10001:10001 /app/data
+USER 10001:10001
+EXPOSE 8090
+CMD ["python", "-I", "main.py", "--api", "--api-host", "0.0.0.0"]

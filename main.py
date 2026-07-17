@@ -9,6 +9,7 @@ from pathlib import Path
 from agent import ForgeAgent
 from benchmark import run_safety_benchmark
 from capability_graph import CapabilityGraph
+from api_server import serve as serve_api
 from comparison import compare
 from dashboard import serve
 from demo_tasks import DEMO_TASKS, SHOWCASE_TASKS
@@ -37,6 +38,9 @@ def main() -> None:
     parser.add_argument("--repo-graph", action="store_true", help="Export the repository intelligence graph")
     parser.add_argument("--evaluate", action="store_true", help="Run the 50-case Foundry Evaluation Arena")
     parser.add_argument("--mcp", action="store_true", help="Run ForgeAgent's stdio MCP server")
+    parser.add_argument("--api", action="store_true", help="Run the local authenticated ForgeAgent control-plane HTTP API")
+    parser.add_argument("--api-port", type=int, default=8090, help="Control-plane API port (default: 8090)")
+    parser.add_argument("--api-host", default="127.0.0.1", help="Control-plane bind host (default: loopback only)")
     parser.add_argument("--reset", action="store_true", help="Remove the demo registry before running")
     parser.add_argument("--list-tools", action="store_true", help="List registered verified tools")
     parser.add_argument("--task", help="One supported task")
@@ -55,6 +59,9 @@ def main() -> None:
     registry = ToolRegistry(registry_path)
     if args.mcp:
         mcp_main()
+        return
+    if args.api:
+        serve_api(args.api_port, host=args.api_host)
         return
     if args.serve:
         serve(registry_path, args.port)

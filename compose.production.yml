@@ -1,6 +1,26 @@
-# Reference deployment profile. It runs the capability worker without network
-# egress. Put the API/control plane in a separate service/network if needed.
+# Reference deployment profile. Keep the public control plane behind a TLS
+# gateway/identity provider; the capability worker remains egress-free.
 services:
+  control-plane:
+    build:
+      context: .
+      dockerfile: Dockerfile.control-plane
+    image: forgeagent-control-plane:local
+    ports:
+      - "127.0.0.1:8090:8090"
+    read_only: true
+    user: "10001:10001"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1.00
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    volumes:
+      - forgeagent-data:/app/data
   capability-sandbox:
     build:
       context: .
@@ -18,3 +38,6 @@ services:
     cpus: 0.50
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m
+
+volumes:
+  forgeagent-data:

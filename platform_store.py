@@ -56,6 +56,9 @@ class PlatformStore:
         self.db.executescript(SCHEMA)
         self.db.commit()
 
+    def close(self) -> None:
+        self.db.close()
+
     def promote(self, project_id: str, name: str, source: str, provenance: str, proof: dict[str, object], policy: str = "auto", threat_model: dict[str, object] | None = None) -> CapabilityRecord:
         if not project_id.strip() or not name.strip():
             raise ValueError("project_id and capability name are required")

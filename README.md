@@ -59,6 +59,7 @@ than only a single agent workflow:
 | MCP integration | Stdio MCP server and example client configuration | Coding agents can inspect governed capabilities as a developer tool. |
 | Evaluation arena | 50 deterministic cases: safe tools, unsafe proposals, privacy-first incidents | Claims are measured locally rather than presented as invented benchmark numbers. |
 | Production profile | Rootless/read-only container, egress disabled, resource limits, approval gates | The security story extends beyond a browser or local subprocess. |
+| Control-plane foundation | Tenant roles, hashed API tokens, local HTTP API, MCP v2 request/run/status tools | Teams can integrate governed capability lifecycle into coding-agent workflows. |
 
 ## Who uses it and when
 
@@ -253,7 +254,7 @@ as `null` when no model call was made.
 
 GitHub Actions continuously watches the repository through
 [`ci.yml`](.github/workflows/ci.yml): every push and pull request to `main`
-runs the 24-test proof suite, compiles Python, validates the hosted-demo
+runs the 26-test proof suite, compiles Python, validates the hosted-demo
 JavaScript, checks production assets, builds the rootless sandbox image, and
 executes a small no-egress container capability. A scheduled daily health run
 catches environmental regressions even when no one is pushing code.
@@ -277,6 +278,22 @@ The `PlatformStore` can export a trusted capability as an HMAC-SHA256 signed
 package with source, provenance, and proof evidence. Imports always enter
 review state in the receiving project; they cannot silently become trusted.
 
+## Control plane and coding-agent integration
+
+ForgeAgent now includes MCP v2 tools for requesting a capability, reusing a
+trusted one, checking approval state, and reading audit-safe metrics. It also
+ships a local authenticated control-plane API with project roles (`viewer`,
+`developer`, `reviewer`, `admin`, `owner`) and expiring hashed bearer tokens.
+
+```bash
+python3 main.py --api
+```
+
+The API binds to loopback by default and is intended for local development or
+a trusted gateway. See [developer integration and API instructions](docs/INTEGRATIONS.md)
+for Codex, Cursor, Claude Code, role rules, curl examples, and the remote
+deployment boundary.
+
 ## Repository map
 
 - `foundry.py` — five-role council and governed capability lifecycle.
@@ -288,6 +305,9 @@ review state in the receiving project; they cannot silently become trusted.
   hardened container execution profiles.
 - `compose.production.yml` — production runtime reference configuration.
 - `mcp_server.py` — MCP developer-tool surface.
+- `control_plane.py` and `api_server.py` — tenant roles, hashed tokens,
+  authenticated API contracts, and audit-safe metrics.
+- `Dockerfile.control-plane` — rootless control-plane container profile.
 - `demo/index.html` — hosted, no-key judge experience.
 
 ## Safety scope
@@ -320,4 +340,4 @@ policy/test rejection.
 - Offline proof: `python3 main.py --demo --reset`.
 - Live GPT-5.6 proof: set `OPENAI_API_KEY` and use `--forge` as above.
 - Visual inspection: `python3 main.py --serve`.
-- Verification snapshot: `python3 -m unittest discover -s tests -v` (24 tests).
+- Verification snapshot: `python3 -m unittest discover -s tests -v` (26 tests).
