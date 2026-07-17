@@ -56,7 +56,7 @@ jobs:
         run: docker build --pull -f Dockerfile.sandbox -t forgeagent-sandbox:ci .
       - name: Execute a constrained no-egress capability
         run: |
-          printf '%s\n%s\n' 'def run(payload): return {"value": payload["value"]}' '{"value":"isolated"}' | \
+          printf '%s\n%s\n' '"def run(payload): return {\"value\": payload[\"value\"]}"' '{"value":"isolated"}' | \
             docker run --rm -i --network none --read-only --cap-drop ALL \
               --security-opt no-new-privileges --pids-limit 64 --memory 256m --cpus 0.50 \
               --tmpfs /tmp:rw,noexec,nosuid,size=16m forgeagent-sandbox:ci
