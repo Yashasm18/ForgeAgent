@@ -6,14 +6,9 @@
 ## Live judge demo
 
 **[Open the Forge Ledger →](https://yashasm18.github.io/ForageAgent/)** — a
-no-install judge experience with a preloaded autonomy run, an interactive
-browser capability run, and a **Forge Challenge** that demonstrates rejection,
-repair, verification, lineage, and rollback under judge-selected failures.
-
-The hosted experience also includes **ForageGraph** (a clickable,
-time-replayable capability graph) and **Mission Control**: curated key-free
-skill forging, browser-memory counters, promotion modes, an evaluation arena,
-and downloadable audit receipts.
+no-install, judge-facing walkthrough of ForgeAgent. It presents the method,
+clickable **ForageGraph**, an interactive browser capability run, the platform
+governance model, an attack lab, and evidence from the evaluation suite.
 
 Long-running agents need to acquire small capabilities as work changes, but
 blindly executing generated code creates a memory full of unproven behavior.
@@ -50,12 +45,18 @@ does not claim to be a live model call.
 ## Hosted judge demo
 
 `demo/` is a no-install, static Forge Ledger designed for the Devpost
-**judge-testing** field. It contains a preloaded autonomy run for immediate
-review plus an interactive, deterministic browser run: paste an incident and
-execute PII redaction, risk triage, and feedback-term extraction. Its Forge
-Challenge additionally lets reviewers inject broken, unsafe, contract-violating,
-or regressing candidates and watch the trust ledger repair or roll them back.
-Neither requires an API key.
+**judge-testing** field. Its design deliberately separates the claims into a
+short judge path: understand the capability graph, run a private incident
+through the trusted chain, inspect governance and marketplace boundaries, then
+try an unsafe or regressing proposal in the **Policy Attack Lab**. Neither the
+hosted page nor its interactive demo requires an API key.
+
+The hosted interactive run is deterministic: paste an incident and execute PII
+redaction, risk triage, and feedback-term extraction in the browser. The
+ForageGraph is clickable and time-replayable; it shows the task, selected
+capabilities, isolated proof, and audit receipt rather than a generic codebase
+map. The attack lab makes filesystem access, network access, invalid contracts,
+and post-promotion regressions visible as policy/proof decisions.
 
 The interactive redactor removes emails, phone numbers, card-like values, and
 explicitly labelled secrets such as secret codes, passwords, OTPs, API keys,
@@ -68,8 +69,9 @@ Use the hosted demo here:
 https://yashasm18.github.io/ForageAgent/
 ```
 
-GitHub Pages serves the static `demo/` directory from the `gh-pages` branch.
-The full local ledger remains available through `python3 main.py --serve`.
+GitHub Pages deploys the static `demo/` directory when a `demo/**` change is
+merged to `main`. The full local ledger remains available through
+`python3 main.py --serve`.
 
 The dashboard now also shows the **Evidence Trail**: every capability request,
 policy rejection, verification result, trusted reuse, and execution is stored
@@ -80,6 +82,14 @@ safe code, filesystem access, network access, dynamic execution, and a broken
 tool contract. `--showcase` is the recording-ready workflow: redact sensitive
 support data, explain customer risk, and reuse those proven capabilities on the
 next pass.
+
+### Judge walkthrough
+
+1. Open the hosted demo and click a ForageGraph node to inspect its proof and lineage.
+2. In **Interactive capability run**, paste or select an incident and run the chain.
+3. In **Persistent memory with a control plane**, review the promotion and marketplace boundaries.
+4. In **Policy Attack Lab**, inject `Filesystem access` or `Regression after promotion`.
+5. Use the repository commands below to reproduce the full local platform and evaluation evidence.
 
 ## Capability Graph and task recovery
 
