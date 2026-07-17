@@ -16,6 +16,81 @@ blindly executing generated code creates a memory full of unproven behavior.
 ForgeAgent turns each capability gap into a disciplined loop: **propose →
 policy-check → isolate → prove → persist → reuse**.
 
+## Install and use
+
+### 1. Get the project
+
+```bash
+git clone https://github.com/Yashasm18/ForgeAgent.git
+cd ForgeAgent
+python3 -m unittest discover -s tests -v
+```
+
+Requirements: Python 3.10+; no Python packages or API key are required for the
+offline demo. Docker Desktop is optional and only needed for container-isolation
+validation.
+
+### 2. Use it from the command line
+
+```bash
+# Show a verified create → reuse lifecycle.
+python3 main.py --demo --reset
+python3 main.py --demo
+
+# Ask the Foundry to govern a supported capability request.
+python3 main.py --foundry-task "Find word frequency" \
+  --payload '{"text":"tools tools reliable"}'
+
+# Run the evidence suite.
+python3 main.py --evaluate
+```
+
+### 3. Use it with Codex, Cursor, or Claude Code through MCP
+
+Copy the MCP config and replace the absolute project path:
+
+```json
+{
+  "mcpServers": {
+    "forgeagent-foundry": {
+      "command": "python3",
+      "args": ["/absolute/path/to/ForgeAgent/mcp_server.py"]
+    }
+  }
+}
+```
+
+Then ask your coding agent: **“Inspect ForgeAgent capability memory before
+creating a new parser, validator, or extractor.”** It can use
+`forge_inspect_repository`, `forge_request_capability`,
+`forge_run_trusted_capability`, and approval/audit tools.
+
+For exact Codex, Cursor, and Claude Code registration steps, see
+[INTEGRATIONS.md](docs/INTEGRATIONS.md).
+
+### 4. Run the local team control plane
+
+```bash
+python3 main.py --api
+```
+
+In a second terminal, create a project. The response returns a one-time
+bootstrap bearer token; store it privately and do not commit it.
+
+```bash
+curl -X POST http://127.0.0.1:8090/v1/projects \
+  -H 'Content-Type: application/json' \
+  -d '{"project_id":"team/invoices","owner":"alice"}'
+```
+
+### 5. Open the visual demo
+
+```bash
+python3 main.py --serve
+```
+
+Open `http://127.0.0.1:8787`, or use the hosted no-install demo above.
+
 ## Capability Foundry
 
 ForgeAgent is now a **Capability Foundry**: a governed learning layer for
