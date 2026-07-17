@@ -14,7 +14,7 @@ class ControlPlaneTests(unittest.TestCase):
                 token = plane.issue_token("owner", "test", ttl_seconds=60)
                 self.assertEqual(plane.authenticate(token), "owner")
                 plane.grant_role("team/invoices", "owner", "developer", "developer")
-                outcome = plane.request_capability("team/invoices", "developer", "Find word frequency", {"text": "tools tools"})
+                outcome = plane.request_capability("team/invoices", "developer", "Normalize inconsistent date formats in this import log", {"text": "batch=A 03/07/2026"})
                 self.assertEqual(outcome["status"], "pending")
                 metrics = plane.metrics("team/invoices", "developer")
                 self.assertGreaterEqual(metrics["control_event_count"], 3)

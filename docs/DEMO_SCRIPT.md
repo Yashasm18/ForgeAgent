@@ -87,8 +87,8 @@ python3 main.py --compare
 python3 main.py --evaluate
 ```
 
-**Recorded reference run:** stateless agent created 6 skills with 0 reuses in
-352.0 ms; ForgeAgent created 3 skills with 3 reuses in 258.5 ms. That is 26.6%
+**Recorded reference run:** stateless agent created 36 skills with 0 reuses in
+2058.4 ms; ForgeAgent created 4 skills with 32 reuses in 1478.3 ms. That is 28.2%
 lower elapsed time in that local run. Evaluation passed 50/50 deterministic
 cases, rejected 10 unsafe proposals, made no API calls, and reported $0 API
 cost. Use the numbers your own run prints when recording.

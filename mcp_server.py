@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from dataclasses import asdict
 from typing import Any
 
+from agent import BLUEPRINTS
 from control_plane import ControlPlane
 from foundry import CapabilityFoundry
 from platform_store import PlatformStore
 from repository_graph import RepositoryGraph
+from sandbox import execute
 
 
 def tools() -> list[dict[str, object]]:
@@ -27,17 +30,56 @@ def tools() -> list[dict[str, object]]:
     ]
 
 
+def _project_store(store: PlatformStore, plane: ControlPlane | None) -> PlatformStore:
+    """Use the approval-aware store owned by the project control plane."""
+    return plane.store if plane else store
+
+
+def _capability_name(task: str) -> str:
+    blueprint = next((item for item in BLUEPRINTS if item.matches(task)), None)
+    if blueprint:
+        return blueprint.name
+    return "_".join(re.findall(r"[a-z0-9]+", task.lower())[:5]) or "unnamed_capability"
+
+
+def _run_project_trusted_capability(store: PlatformStore, project_id: str, task: str, payload: dict[str, object]) -> dict[str, object] | None:
+    """Run only an already-approved SQLite capability for an MCP namespace."""
+    capability = _capability_name(task)
+    record = next((item for item in store.list(project_id, trusted_only=True) if item.name == capability), None)
+    if record is None:
+        return None
+    result = execute(record.source, payload)
+    exported = asdict(record)
+    return {
+        "task": task,
+        "capability": capability,
+        "status": "reused",
+        "result": result,
+        "council": [
+            {"role": "planner", "status": "complete", "detail": f"Task maps to capability '{capability}'."},
+            {"role": "builder", "status": "skipped", "detail": "An approved project capability already exists."},
+            {"role": "governor", "status": "reused", "detail": f"Reused approved {capability}@v{record.version} from project capability memory."},
+        ],
+        "inspection": {"impact": [], "existing_trusted_tool": exported, "match_count": 1},
+        "threat_model": None,
+        "proof": None,
+        "memory_record": exported,
+        "memory_source": "platform_store",
+    }
+
+
 def call(name: str, arguments: dict[str, Any], store: PlatformStore, plane: ControlPlane | None = None) -> object:
+    project_store = _project_store(store, plane)
     if name == "forge_inspect_repository":
         graph = RepositoryGraph(".")
         graph.build()
         return {"matches": graph.query(arguments["capability"]), "impact": graph.impact(arguments["capability"])}
     if name == "forge_list_capabilities":
-        return {"capabilities": [asdict(record) for record in store.list(arguments["project_id"])]}
+        return {"capabilities": [asdict(record) for record in project_store.list(arguments["project_id"])]}
     if name == "forge_get_audit_receipt":
-        return store.receipt(arguments["project_id"])
+        return project_store.receipt(arguments["project_id"])
     if name == "forge_decide_capability":
-        return asdict(store.decide(arguments["capability_id"], arguments["decision"], arguments["reviewer"], arguments["reason"]))
+        return asdict(project_store.decide(arguments["capability_id"], arguments["decision"], arguments["reviewer"], arguments["reason"]))
     if name == "forge_request_capability":
         local_plane = plane or ControlPlane("data")
         project_id = str(arguments["project_id"])
@@ -46,10 +88,15 @@ def call(name: str, arguments: dict[str, Any], store: PlatformStore, plane: Cont
         local_plane.create_project(project_id, "local-mcp")
         return local_plane.request_capability(project_id, "local-mcp", str(arguments["task"]), dict(arguments["payload"]), bool(arguments.get("production", True)))
     if name == "forge_run_trusted_capability":
+        project_id = str(arguments["project_id"])
+        reused = _run_project_trusted_capability(project_store, project_id, str(arguments["task"]), dict(arguments["payload"]))
+        if reused is not None:
+            return reused
         foundry = CapabilityFoundry("data/tool_registry.json", project_id=str(arguments["project_id"]), root=".")
         return foundry.run(str(arguments["task"]), dict(arguments["payload"]), approval_policy="auto")
     if name == "forge_get_approval_status":
-        return {"capabilities": [asdict(record) for record in store.list(str(arguments["project_id"]))], "receipt": store.receipt(str(arguments["project_id"]))}
+        project_id = str(arguments["project_id"])
+        return {"capabilities": [asdict(record) for record in project_store.list(project_id)], "receipt": project_store.receipt(project_id)}
     if name == "forge_get_metrics":
         local_plane = plane or ControlPlane("data")
         project_id = str(arguments["project_id"])

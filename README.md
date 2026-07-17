@@ -12,9 +12,9 @@ policy-check → isolate → prove → persist → reuse**.
 
 ```text
 Measured locally with: python3 main.py --compare
-Stateless agent:  6 new skills · 0 reuses · 352.0 ms
-ForgeAgent:       3 new skills · 3 reuses · 258.5 ms
-# Same two-run incident workflow: 26.6% lower elapsed time in this recorded run.
+Stateless agent:  36 new skills · 0 reuses · 2058.4 ms
+ForgeAgent:       4 new skills · 32 reuses · 1478.3 ms
+# Same 18-step recurring workflow: 28.2% lower elapsed time in this recorded run.
 
 Measured locally with: python3 main.py --evaluate
 50 / 50 deterministic cases passed · 10 / 10 unsafe proposals rejected · $0 API cost
@@ -29,7 +29,7 @@ no-install walkthrough with the clickable **ForgeGraph**, a browser capability
 run, Policy Attack Lab, version lineage, and Production Preflight.
 
 Why not regenerate a tool every time? This recorded comparison shows the second
-workflow needed **3 fewer new skills** and reused **3 proof-backed capabilities**
+workflow needed **32 fewer new skills** and reused **32 proof-backed capabilities**
 instead of treating every task as new code.
 
 ## Install and use
@@ -54,8 +54,8 @@ python3 main.py --demo --reset
 python3 main.py --demo
 
 # Ask the Foundry to govern a supported capability request.
-python3 main.py --foundry-task "Find word frequency" \
-  --payload '{"text":"tools tools reliable"}'
+python3 main.py --foundry-task "Normalize inconsistent date formats in this import log" \
+  --payload '{"text":"batch=A 03/07/2026; batch=B 2026/7/4"}'
 
 # Run the evidence suite.
 python3 main.py --evaluate
@@ -196,7 +196,7 @@ python3 main.py --demo --reset
 python3 main.py --demo
 python3 main.py --serve
 python3 main.py --benchmark
-python3 main.py --foundry-task "Find word frequency in this customer feedback" --payload '{"text":"tools tools reliable"}'
+python3 main.py --foundry-task "Extract structured error codes and line numbers from this stack trace" --payload '{"text":"ERROR E_CONN_TIMEOUT at ingest.py:line 42"}'
 python3 main.py --repo-graph
 python3 main.py --evaluate
 python3 main.py --mcp
@@ -223,7 +223,7 @@ starts the stdio MCP server for compatible coding agents.
 | --- | --- | --- |
 | Fast offline proof | `python3 main.py --demo --reset` | Curated skills are created only after proof. |
 | Reuse proof | `python3 main.py --demo` | The second run reuses verified skills. |
-| Foundry council | `python3 main.py --foundry-task "Find word frequency" --payload '{"text":"tools tools"}'` | Council decisions, proof, and governed memory record. |
+| Foundry council | `python3 main.py --foundry-task "Normalize inconsistent date formats in this import log" --payload '{"text":"batch=A 03/07/2026"}'` | Council decisions, proof, and governed memory record. |
 | Evaluation evidence | `python3 main.py --evaluate` | Actual output across 50 deterministic cases. |
 | Repository intelligence | `python3 main.py --repo-graph` | Queryable code/docs graph export. |
 | Developer-tool mode | `python3 main.py --mcp` | MCP server over standard input/output. |
@@ -240,8 +240,8 @@ privileges, PID/CPU/memory limits, and a non-root user**.
 ```bash
 docker build -f Dockerfile.sandbox -t forgeagent-sandbox:local .
 FORGEAGENT_SANDBOX=container FORGEAGENT_REQUIRE_CONTAINER=1 \
-  python3 main.py --foundry-task "Find word frequency in this customer feedback" \
-  --approval-policy production --payload '{"text":"tools tools reliable"}'
+  python3 main.py --foundry-task "Normalize inconsistent date formats in this import log" \
+  --approval-policy production --payload '{"text":"batch=A 03/07/2026"}'
 ```
 
 `compose.production.yml` is a deployable reference profile. The
@@ -365,7 +365,7 @@ as `null` when no model call was made.
 
 GitHub Actions continuously watches the repository through
 [`ci.yml`](.github/workflows/ci.yml): every push and pull request to `main`
-runs the 30-test proof suite, compiles Python, validates the hosted-demo
+runs the 31-test proof suite, compiles Python, validates the hosted-demo
 JavaScript, checks production assets, builds the rootless sandbox image, and
 executes a small no-egress container capability. A scheduled daily health run
 catches environmental regressions even when no one is pushing code.
@@ -451,4 +451,4 @@ policy/test rejection.
 - Offline proof: `python3 main.py --demo --reset`.
 - Live GPT-5.6 proof: set `OPENAI_API_KEY` and use `--forge` as above.
 - Visual inspection: `python3 main.py --serve`.
-- Verification snapshot: `python3 -m unittest discover -s tests -v` (30 tests).
+- Verification snapshot: `python3 -m unittest discover -s tests -v` (31 tests).

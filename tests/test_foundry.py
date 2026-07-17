@@ -20,9 +20,9 @@ class FoundryTests(unittest.TestCase):
             root = Path(directory)
             registry = root / "registry.json"
             foundry = CapabilityFoundry(registry, root=root)
-            first = foundry.run("Find word frequency in this customer feedback", {"text": "tools tools reliable"})
+            first = foundry.run("Normalize inconsistent date formats in this import log", {"text": "batch=A 03/07/2026"})
             self.assertEqual(first["status"], "trusted")
-            second = foundry.run("Find word frequency in this customer feedback", {"text": "tools"})
+            second = foundry.run("Normalize inconsistent date formats in this import log", {"text": "batch=B 2026/7/4"})
             self.assertEqual(second["status"], "reused")
 
     def test_unknown_capability_needs_live_generator(self):

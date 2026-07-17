@@ -61,8 +61,8 @@ class ProductionControlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             registry_path = Path(directory) / "skills.json"
             registry = ToolRegistry(registry_path)
-            registry.register(Tool("word_frequency", "test", SOURCE, {"value": "safe"}, {"ok": "safe"}, ToolRegistry.timestamp()))
+            registry.register(Tool("date_format_normalizer", "test", SOURCE, {"value": "safe"}, {"ok": "safe"}, ToolRegistry.timestamp()))
             foundry = CapabilityFoundry(registry_path, root=Path(directory))
-            outcome = foundry.run("Find word frequency", {"value": "safe"}, approval_policy="production")
+            outcome = foundry.run("Normalize inconsistent date formats in this import log", {"value": "safe"}, approval_policy="production")
             self.assertEqual(outcome["status"], "pending")
             self.assertIsNone(outcome["result"])

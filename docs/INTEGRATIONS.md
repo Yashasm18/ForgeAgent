@@ -94,7 +94,7 @@ curl http://127.0.0.1:8090/v1/projects/team/invoices/snapshot \
 curl -X POST http://127.0.0.1:8090/v1/projects/team/invoices/capability-requests \
   -H 'Authorization: Bearer fga_replace_me' \
   -H 'Content-Type: application/json' \
-  -d '{"task":"Find word frequency","payload":{"text":"tools tools reliable"},"production":true}'
+  -d '{"task":"Normalize inconsistent date formats in this import log","payload":{"text":"batch=A 03/07/2026"},"production":true}'
 ```
 
 Roles are `viewer`, `developer`, `reviewer`, `admin`, and `owner`. Capability

@@ -16,9 +16,9 @@ INCIDENT_RECOVERY_PLAN = (
         ("redact",),
     ),
     PlanStep(
-        "summarize",
-        "Find word frequency in this customer feedback",
-        {"text": "Reliable tools make teams reliable; teams build reliable work."},
+        "extract_errors",
+        "Extract structured error codes and line numbers from this stack trace",
+        {"text": "ERROR E_GATEWAY_TIMEOUT at gateway.py:line 73"},
         ("triage",),
     ),
 )

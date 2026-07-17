@@ -34,35 +34,37 @@ class PlanStep:
 
 BLUEPRINTS = (
     ToolBlueprint(
-        "word_frequency",
-        "Count normalized words in text and return descending frequency rows.",
+        "date_format_normalizer",
+        "Normalize date formats from import logs into ISO-8601 calendar dates.",
         '''import re
 def run(payload):
-    words = re.findall(r"[a-z0-9']+", payload["text"].lower())
-    counts = {}
-    for word in words:
-        counts[word] = counts.get(word, 0) + 1
-    return [{"word": word, "count": count} for word, count in sorted(counts.items(), key=lambda row: (-row[1], row[0]))]
+    months = {"jan": "01", "feb": "02", "mar": "03", "apr": "04", "may": "05", "jun": "06", "jul": "07", "aug": "08", "sep": "09", "oct": "10", "nov": "11", "dec": "12"}
+    text = payload["text"]
+    text = re.sub(r"\\b(\\d{4})[/-](\\d{1,2})[/-](\\d{1,2})\\b", lambda item: f"{item.group(1)}-{int(item.group(2)):02d}-{int(item.group(3)):02d}", text)
+    text = re.sub(r"\\b(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})\\b", lambda item: f"{item.group(3)}-{int(item.group(2)):02d}-{int(item.group(1)):02d}", text)
+    text = re.sub(r"\\b([A-Za-z]{3})\\s+(\\d{1,2}),\\s*(\\d{4})\\b", lambda item: f"{item.group(3)}-{months[item.group(1).lower()]}-{int(item.group(2)):02d}", text)
+    return text
 ''',
-        {"text": "Build, build better tools."},
-        [{"word": "build", "count": 2}, {"word": "better", "count": 1}, {"word": "tools", "count": 1}],
-        lambda task: any(word in task.lower() for word in ("word frequency", "word count", "frequent words")),
+        {"text": "batch=A 03/07/2026; batch=B 2026/7/4; batch=C Jul 5, 2026"},
+        "batch=A 2026-07-03; batch=B 2026-07-04; batch=C 2026-07-05",
+        lambda task: any(phrase in task.lower() for phrase in ("normalize date", "date format", "import log")),
     ),
     ToolBlueprint(
-        "email_domain_summary",
-        "Extract email domains and count them case-insensitively.",
+        "stack_trace_error_extractor",
+        "Extract structured error codes, source files, and line numbers from stack traces.",
         '''import re
 def run(payload):
-    emails = re.findall(r"[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})", payload["text"])
-    counts = {}
-    for domain in emails:
-        domain = domain.lower()
-        counts[domain] = counts.get(domain, 0) + 1
-    return [{"domain": domain, "count": count} for domain, count in sorted(counts.items(), key=lambda row: (-row[1], row[0]))]
+    records = []
+    for row in payload["text"].splitlines():
+        code = re.search(r"\\b(?:E|ERR)_[A-Z0-9_]+\\b", row)
+        location = re.search(r"([A-Za-z0-9_./-]+\\.py):(?:line\\s*)?(\\d+)", row)
+        if code and location:
+            records.append({"code": code.group(0), "file": location.group(1), "line": int(location.group(2))})
+    return records
 ''',
-        {"text": "a@OpenAI.com; b@openai.com; c@example.org"},
-        [{"domain": "openai.com", "count": 2}, {"domain": "example.org", "count": 1}],
-        lambda task: any(word in task.lower() for word in ("email domain", "email domains", "domain summary")),
+        {"text": "ERROR E_CONN_TIMEOUT at ingest.py:line 42\nValidation failed E_SCHEMA_INVALID in parser.py:17"},
+        [{"code": "E_CONN_TIMEOUT", "file": "ingest.py", "line": 42}, {"code": "E_SCHEMA_INVALID", "file": "parser.py", "line": 17}],
+        lambda task: any(phrase in task.lower() for phrase in ("extract structured error", "error code", "stack trace", "line number")),
     ),
     ToolBlueprint(
         "pii_redactor",
