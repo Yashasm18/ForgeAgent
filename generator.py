@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -75,6 +74,66 @@ intent. Return JSON only in this form: {"capability_name":"exact_name"} or
 {"capability_name":null}. Never invent a name, modify the catalog, propose new
 code, or select a capability unless the intent is a clear match."""
 
+# `input` and `expected_output` intentionally accept any JSON-compatible
+# value; the surrounding object shape is what Structured Outputs enforces.
+JSON_VALUE_SCHEMA: dict[str, object] = {}
+
+PROPOSAL_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "name": {"type": "string"},
+        "description": {"type": "string"},
+        "source": {"type": "string"},
+        "tests": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "input": JSON_VALUE_SCHEMA,
+                    "expected_output": JSON_VALUE_SCHEMA,
+                },
+                "required": ["input", "expected_output"],
+            },
+        },
+    },
+    "required": ["name", "description", "source", "tests"],
+}
+
+CAPABILITY_MATCH_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "capability_name": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+    },
+    "required": ["capability_name"],
+}
+
+ADVERSARIAL_CASES_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "cases": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 4,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "input": JSON_VALUE_SCHEMA,
+                    "expected_output": JSON_VALUE_SCHEMA,
+                    "rationale": {"type": "string"},
+                },
+                "required": ["input", "expected_output", "rationale"],
+            },
+        },
+    },
+    "required": ["cases"],
+}
+
 
 class GPT56Generator:
     """Minimal stdlib client so the project has no framework dependency."""
@@ -90,7 +149,12 @@ class GPT56Generator:
             raise GeneratorError("OPENAI_API_KEY is required for live GPT-5.6 generation")
 
     def propose(self, capability: str, payload: object) -> ToolProposal:
-        text = self._complete(SYSTEM_PROMPT, f"Capability: {capability}\nExample payload: {json.dumps(payload)}")
+        text = self._complete(
+            SYSTEM_PROMPT,
+            f"Capability: {capability}\nExample payload: {json.dumps(payload)}",
+            schema_name="forgeagent_tool_proposal",
+            schema=PROPOSAL_SCHEMA,
+        )
         return _parse_proposal(text, f"GPT-5.6 ({self.model})")
 
     def plan(self, user_task: str, payload: object) -> list[dict[str, object]]:
@@ -114,7 +178,12 @@ class GPT56Generator:
             "source": proposal.source,
             "existing_tests": [{"input": input_value, "expected_output": expected} for input_value, expected in proposal.tests],
         }
-        text = self._complete(ADVERSARIAL_PROMPT, f"Candidate to attack:\n{json.dumps(candidate)}")
+        text = self._complete(
+            ADVERSARIAL_PROMPT,
+            f"Candidate to attack:\n{json.dumps(candidate)}",
+            schema_name="forgeagent_adversarial_cases",
+            schema=ADVERSARIAL_CASES_SCHEMA,
+        )
         return _parse_adversarial_cases(text)
 
     def match_existing_capability(self, task: str, capabilities: list[dict[str, str]]) -> str | None:
@@ -125,10 +194,19 @@ class GPT56Generator:
         text = self._complete(
             CAPABILITY_MATCH_PROMPT,
             f"Task: {task}\nExisting capability catalog: {json.dumps(catalog)}",
+            schema_name="forgeagent_capability_match",
+            schema=CAPABILITY_MATCH_SCHEMA,
         )
         return _parse_capability_match(text, {item["name"] for item in catalog})
 
-    def _complete(self, system_prompt: str, user_text: str) -> str:
+    def _complete(
+        self,
+        system_prompt: str,
+        user_text: str,
+        *,
+        schema_name: str | None = None,
+        schema: dict[str, object] | None = None,
+    ) -> str:
         request_body = {
             "model": self.model,
             "input": [
@@ -136,6 +214,15 @@ class GPT56Generator:
                 {"role": "user", "content": [{"type": "input_text", "text": user_text}]},
             ],
         }
+        if schema_name and schema:
+            request_body["text"] = {
+                "format": {
+                    "type": "json_schema",
+                    "name": schema_name,
+                    "strict": True,
+                    "schema": schema,
+                },
+            }
         request = urllib.request.Request(
             "https://api.openai.com/v1/responses",
             data=json.dumps(request_body).encode(),
@@ -156,9 +243,8 @@ class GPT56Generator:
 
 
 def _parse_proposal(text: str, provenance: str) -> ToolProposal:
-    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
     try:
-        data = json.loads(fenced.group(1) if fenced else text)
+        data = json.loads(text)
         tests = tuple((item["input"], item["expected_output"]) for item in data["tests"])
         if not tests:
             raise ValueError("no tests")
@@ -168,9 +254,8 @@ def _parse_proposal(text: str, provenance: str) -> ToolProposal:
 
 
 def _parse_adversarial_cases(text: str) -> list[ProofCase]:
-    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
     try:
-        data = json.loads(fenced.group(1) if fenced else text)
+        data = json.loads(text)
         raw_cases = data["cases"]
         if not isinstance(raw_cases, list) or not 2 <= len(raw_cases) <= 4:
             raise ValueError("expected 2-4 adversarial cases")
@@ -187,9 +272,8 @@ def _parse_adversarial_cases(text: str) -> list[ProofCase]:
 
 def _parse_capability_match(text: str, allowed_names: set[str]) -> str | None:
     """Parse and validate a semantic match against the caller's allowlist."""
-    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
     try:
-        data = json.loads(fenced.group(1) if fenced else text)
+        data = json.loads(text)
         name = data["capability_name"]
         if name is None:
             return None
