@@ -13,6 +13,9 @@ from comparison import compare
 from dashboard import serve
 from demo_tasks import DEMO_TASKS, SHOWCASE_TASKS
 from generator import GPT56Generator, GeneratorError
+from evaluation import run_evaluation_suite
+from mcp_server import main as mcp_main
+from platform_store import PlatformStore
 from registry import ToolRegistry
 from workflows import INCIDENT_RECOVERY_PLAN
 
@@ -34,6 +37,9 @@ def main() -> None:
     parser.add_argument("--payload", help="JSON payload used with --forge")
     parser.add_argument("--model", default="gpt-5.6", help="OpenAI model for live forging (default: gpt-5.6)")
     parser.add_argument("--serve", action="store_true", help="Open the zero-dependency Forge Ledger dashboard")
+    parser.add_argument("--evaluate", action="store_true", help="Run the 20-case evidence evaluation suite")
+    parser.add_argument("--platform-demo", action="store_true", help="Demonstrate persistent namespace memory and governance")
+    parser.add_argument("--mcp", action="store_true", help="Run ForgeAgent's stdio MCP server")
     parser.add_argument("--port", type=int, default=8787, help="Dashboard port (default: 8787)")
     args = parser.parse_args()
     registry_path = Path("data/tool_registry.json")
@@ -42,6 +48,9 @@ def main() -> None:
             if artifact.exists():
                 artifact.unlink()
     registry = ToolRegistry(registry_path)
+    if args.mcp:
+        mcp_main()
+        return
     if args.serve:
         serve(registry_path, args.port)
         return
@@ -50,6 +59,20 @@ def main() -> None:
         return
     if args.benchmark:
         print(json.dumps(run_safety_benchmark(), indent=2))
+        return
+    if args.evaluate:
+        print(json.dumps(run_evaluation_suite(), indent=2))
+        return
+    if args.platform_demo:
+        store = PlatformStore("data/platform.sqlite3")
+        capability = store.promote(
+            "demo/support",
+            "incident_text_normalizer",
+            "def run(payload): return payload['text'].strip().lower()",
+            "offline platform demonstration",
+            [({"text": " HELLO "}, "hello", True), ({"text": "World"}, "world", True)],
+        )
+        print(json.dumps({"capability": capability.__dict__, "receipt": store.receipt("demo/support")}, indent=2))
         return
     if args.compare:
         print(json.dumps(compare(INCIDENT_RECOVERY_PLAN), indent=2))

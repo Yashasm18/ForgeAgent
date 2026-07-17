@@ -34,6 +34,8 @@ python3 main.py --demo --reset
 python3 main.py --demo
 python3 main.py --serve
 python3 main.py --benchmark
+python3 main.py --evaluate
+python3 main.py --platform-demo
 python3 main.py --showcase --reset
 python3 main.py --autonomy-demo --reset
 python3 main.py --autonomy-demo
@@ -137,13 +139,49 @@ and an import/operation policy. The policy gate is exposed separately before
 execution and every decision is recorded. Production deployment would require
 stronger OS/container isolation, network controls, and human review policies.
 
+## Persistent platform, governance, and MCP
+
+ForgeAgent now includes a local-first SQLite platform store (`data/platform.sqlite3`).
+It persists team/project namespaces, capability versions, proof cases, trust scores,
+approval decisions, rollback events, and audit receipts. It deliberately stores no
+raw incident payloads in its receipts.
+
+The **Capability Marketplace** exports a capability with its provenance and proof
+evidence in a tamper-evident HMAC-SHA256 package. Imports always enter a human
+approval inbox; an imported skill cannot silently become trusted in another project.
+
+```bash
+python3 main.py --platform-demo
+python3 main.py --evaluate
+python3 main.py --mcp
+```
+
+`--evaluate` runs 20 deterministic cases across allowed transforms, unsafe proposal
+rejection, and privacy-first incident analysis. It reports measured outcomes only;
+it does not invent latency, cost, or completion figures.
+
+`--mcp` starts a stdio JSON-RPC MCP server. Configure a compatible client such as
+Codex, Cursor, or Claude Code with `python3 /absolute/path/to/mcp_server.py`.
+Copy and edit [`mcp.config.example.json`](mcp.config.example.json) for a
+client configuration starting point.
+It exposes `forge_list_capabilities`, `forge_get_audit_receipt`,
+`forge_approval_inbox`, and `forge_decide_capability`. The MCP boundary provides
+memory and governance operations only—it cannot execute a marketplace package.
+
+The evaluation also includes an actual two-pass stateless-versus-ForgeAgent
+comparison for the dependent incident workflow, reporting local elapsed time,
+new capabilities, and verified reuse. API cost is deliberately reported as
+`null` in key-free runs rather than invented.
+
+Governance rules are explicit: low-risk, fully proven text transforms can be
+auto-promoted; sensitive domains require human review; and external-action
+capabilities can be permanently blocked. A human reviewer can approve, reject, or
+roll back any version while the audit timeline remains intact.
+
 ## OpenAI Build Week evidence
 
 ForgeAgent is entered in **Developer Tools**. See [HACKATHON_SCOPE.md](HACKATHON_SCOPE.md)
 for the boundary between the earlier prototype and Build Week work.
-
-For an end-to-end architecture, safety, deployment, and judge walkthrough, see
-[MASTER.md](MASTER.md).
 
 Codex accelerated the architecture, safety lifecycle, dashboard, tests, and
 submission materials. GPT-5.6 can be used at runtime, with server-side API
@@ -159,4 +197,4 @@ policy/test rejection.
 - Offline proof: `python3 main.py --demo --reset`.
 - Live GPT-5.6 proof: set `OPENAI_API_KEY` and use `--forge` as above.
 - Visual inspection: `python3 main.py --serve`.
-- Verification snapshot: `python3 -m unittest discover -s tests -v` (8 tests).
+- Verification snapshot: `python3 -m unittest discover -s tests -v`.
