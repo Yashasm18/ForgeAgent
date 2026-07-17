@@ -2,6 +2,27 @@
 
 ForgeAgent helps AI coding agents and developer teams turn generated code into verified, reusable capabilities before it is allowed to run again.
 
+<!-- demo video goes here once recorded -->
+
+Here, an agent forges a capability once, verifies it, then reuses the proven version instead of regenerating it.
+
+```text
+TASK  Normalize inconsistent date formats in this import log
+GAP    I need 'date_format_normalizer', and I do not have it. I will build it.
+BUILD  Generated executable tool: date_format_normalizer
+TEST   Running mandatory sample test in isolated sandbox...
+VERIFY ✓  Sample test passed. REGISTER ✓  Toolkit now has 1 verified tool(s).
+RUN    Executing date_format_normalizer on task input...
+DONE   Result produced by verified tool.
+"job=ledger 2026-07-03; job=payout 2026-07-04; job=archive 2026-07-05"
+
+TASK  Normalize inconsistent date formats in this import log
+REUSE ✓  Found verified tool: date_format_normalizer
+RUN    Executing date_format_normalizer on task input...
+DONE   Result produced by verified tool.
+"job=ledger 2026-07-03; job=payout 2026-07-04; job=archive 2026-07-05"
+```
+
 ## The hook story
 
 A generated capability could alias `__import__` and attempt to bypass the sandbox policy gate. ForgeAgent closes that class twice: a static AST check rejects it before execution, and the runtime replaces imports with the `safe_import` allowlist in [`sandbox.py`](sandbox.py); both protections are exercised by [`tests/test_sandbox_security.py`](tests/test_sandbox_security.py).
