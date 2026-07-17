@@ -111,6 +111,36 @@ class ForgeAgent:
         self.audit = audit or AuditLog(registry.path.parent / "audit_log.jsonl")
         self.graph = graph or CapabilityGraph(registry.path.parent / "capability_graph.json")
 
+    @staticmethod
+    def _keyword_blueprint(task: str) -> ToolBlueprint | None:
+        """The original deterministic matcher, preserved for every offline run."""
+        return next((item for item in BLUEPRINTS if item.matches(task)), None)
+
+    def _blueprint_for_task(self, task: str) -> ToolBlueprint | None:
+        """Resolve a known capability with a fail-open semantic classification fallback.
+
+        Keyword matching is intentionally first: it is deterministic, local, and
+        free. Semantic matching is attempted only by an explicitly live
+        generator and can return only a name already present in this catalog.
+        Any model, API, or parsing failure preserves the historical result.
+        """
+        keyword_match = self._keyword_blueprint(task)
+        if keyword_match:
+            return keyword_match
+        if not self.generator or not getattr(self.generator, "semantic_matching_available", False):
+            return None
+        matcher = getattr(self.generator, "match_existing_capability", None)
+        if not callable(matcher):
+            return None
+        catalog = [{"name": item.name, "description": item.description} for item in BLUEPRINTS]
+        try:
+            selected_name = matcher(task, catalog)
+        except Exception:
+            return None
+        if not isinstance(selected_name, str):
+            return None
+        return next((item for item in BLUEPRINTS if item.name == selected_name), None)
+
     def forge(self, capability: str, payload: object, max_repairs: int = 2) -> object:
         """Create, verify, persist, and run a model-proposed capability."""
         if not self.generator:
@@ -198,11 +228,11 @@ class ForgeAgent:
                 self.emit(f"\nPLAN STEP  {step.id}  ← {', '.join(step.depends_on) or 'root'}")
                 payload = dict(step.payload)
                 payload["upstream"] = {dep: outputs[dep] for dep in step.depends_on}
-                blueprint = next((item for item in BLUEPRINTS if item.matches(step.task)), None)
+                blueprint = self._blueprint_for_task(step.task)
                 capability = blueprint.name if blueprint else step.task
                 self.graph.record_task_need(user_task, capability)
                 try:
-                    outputs[step.id] = self.complete(step.task, payload) if blueprint else self.forge(step.task, payload)
+                    outputs[step.id] = self.complete(step.task, payload, blueprint=blueprint) if blueprint else self.forge(step.task, payload)
                 except (SandboxError, RuntimeError, KeyError) as exc:
                     self.audit.record("task_step_failed", step.id, str(exc), "failed")
                     if not self.generator:
@@ -235,12 +265,12 @@ class ForgeAgent:
         return self.execute_plan(user_task, steps)
 
     def _tool_for_task(self, task: str) -> Tool | None:
-        blueprint = next((item for item in BLUEPRINTS if item.matches(task)), None)
+        blueprint = self._blueprint_for_task(task)
         return self.registry.get(blueprint.name) if blueprint else None
 
-    def complete(self, task: str, payload: object) -> object:
+    def complete(self, task: str, payload: object, blueprint: ToolBlueprint | None = None) -> object:
         self.emit(f"\nTASK  {task}")
-        blueprint = next((item for item in BLUEPRINTS if item.matches(task)), None)
+        blueprint = blueprint or self._blueprint_for_task(task)
         if not blueprint:
             raise ValueError("No safe generator blueprint for this task. Try a word-frequency or email-domain task.")
         self.graph.record_task_need(task, blueprint.name)

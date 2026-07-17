@@ -68,9 +68,20 @@ must be the correct JSON-compatible result required by the stated contract.
 Do not propose filesystem, network, reflection, dynamic execution, or any
 non-JSON input. Do not change the candidate source."""
 
+CAPABILITY_MATCH_PROMPT = """You are ForgeAgent's read-only capability matcher.
+Given a user task and an allowlisted catalog of existing capability names and
+descriptions, decide whether exactly one catalog capability satisfies the same
+intent. Return JSON only in this form: {"capability_name":"exact_name"} or
+{"capability_name":null}. Never invent a name, modify the catalog, propose new
+code, or select a capability unless the intent is a clear match."""
+
 
 class GPT56Generator:
     """Minimal stdlib client so the project has no framework dependency."""
+
+    # ForgeAgent checks this explicit capability rather than treating arbitrary
+    # proposal generators as live classifiers. Offline fixtures stay offline.
+    semantic_matching_available = True
 
     def __init__(self, api_key: str | None = None, model: str = "gpt-5.6-terra"):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
@@ -105,6 +116,17 @@ class GPT56Generator:
         }
         text = self._complete(ADVERSARIAL_PROMPT, f"Candidate to attack:\n{json.dumps(candidate)}")
         return _parse_adversarial_cases(text)
+
+    def match_existing_capability(self, task: str, capabilities: list[dict[str, str]]) -> str | None:
+        """Return one allowlisted capability name, or ``None`` for no match."""
+        if not self.api_key:
+            raise GeneratorError("OPENAI_API_KEY is required for semantic capability matching")
+        catalog = [{"name": item["name"], "description": item["description"]} for item in capabilities]
+        text = self._complete(
+            CAPABILITY_MATCH_PROMPT,
+            f"Task: {task}\nExisting capability catalog: {json.dumps(catalog)}",
+        )
+        return _parse_capability_match(text, {item["name"] for item in catalog})
 
     def _complete(self, system_prompt: str, user_text: str) -> str:
         request_body = {
@@ -161,3 +183,18 @@ def _parse_adversarial_cases(text: str) -> list[ProofCase]:
         return cases
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise GeneratorError("GPT-5.6 adversarial proof cases were not valid ForgeAgent JSON") from exc
+
+
+def _parse_capability_match(text: str, allowed_names: set[str]) -> str | None:
+    """Parse and validate a semantic match against the caller's allowlist."""
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    try:
+        data = json.loads(fenced.group(1) if fenced else text)
+        name = data["capability_name"]
+        if name is None:
+            return None
+        if not isinstance(name, str) or name not in allowed_names:
+            raise ValueError("response selected a capability outside the supplied catalog")
+        return name
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise GeneratorError("GPT-5.6 semantic match was not valid ForgeAgent JSON") from exc

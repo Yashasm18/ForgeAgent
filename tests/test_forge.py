@@ -33,6 +33,24 @@ class PlannerGenerator(StaticGenerator):
         ]
 
 
+class SemanticMatcherGenerator(StaticGenerator):
+    """A live-capable matcher fixture; it never makes a network call."""
+
+    semantic_matching_available = True
+
+    def __init__(self, proposal, selected_name=None, error=None):
+        super().__init__(proposal)
+        self.selected_name = selected_name
+        self.error = error
+        self.calls = []
+
+    def match_existing_capability(self, task, capabilities):
+        self.calls.append((task, capabilities))
+        if self.error:
+            raise self.error
+        return self.selected_name
+
+
 GOOD = ToolProposal(
     "uppercase_tokens",
     "Return uppercase words from text.",
@@ -103,6 +121,48 @@ class ForgeTests(unittest.TestCase):
             result = agent.execute_user_task("Protect and triage incident", {"text": "ava@example.com says dashboard is down"})
             self.assertIn("redact", result)
             self.assertEqual(result["triage"]["priority"], "high")
+
+    def test_live_semantic_matching_recovers_natural_capability_phrasing(self):
+        task = "please fix the inconsistent dates in this log file"
+        self.assertIsNone(ForgeAgent._keyword_blueprint(task))
+        generator = SemanticMatcherGenerator(GOOD, selected_name="date_format_normalizer")
+        with tempfile.TemporaryDirectory() as directory:
+            agent = ForgeAgent(ToolRegistry(Path(directory) / "skills.json"), emit=lambda _: None, generator=generator)
+            blueprint = agent._blueprint_for_task(task)
+        self.assertEqual(blueprint.name, "date_format_normalizer")
+        self.assertEqual(generator.calls[0][0], task)
+        self.assertIn(
+            {"name": "date_format_normalizer", "description": blueprint.description},
+            generator.calls[0][1],
+        )
+
+    def test_offline_matching_is_identical_to_original_keyword_behavior(self):
+        tasks = (
+            "normalize date format in this import log",
+            "please fix the inconsistent dates in this log file",
+            "extract error code and line number from this stack trace",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            agent = ForgeAgent(ToolRegistry(Path(directory) / "skills.json"), emit=lambda _: None)
+            for task in tasks:
+                # Object identity proves no wrapping or reinterpretation changed
+                # the original first-match keyword result in offline mode.
+                self.assertIs(agent._blueprint_for_task(task), ForgeAgent._keyword_blueprint(task))
+
+    def test_semantic_matching_rejects_unknown_or_failed_model_selection(self):
+        task = "please fix the inconsistent dates in this log file"
+        with tempfile.TemporaryDirectory() as directory:
+            registry = ToolRegistry(Path(directory) / "skills.json")
+            fabricated = ForgeAgent(
+                registry, emit=lambda _: None,
+                generator=SemanticMatcherGenerator(GOOD, selected_name="invented_capability"),
+            )
+            unavailable = ForgeAgent(
+                registry, emit=lambda _: None,
+                generator=SemanticMatcherGenerator(GOOD, error=RuntimeError("network unavailable")),
+            )
+            self.assertIsNone(fabricated._blueprint_for_task(task))
+            self.assertIsNone(unavailable._blueprint_for_task(task))
 
 
 if __name__ == "__main__":
