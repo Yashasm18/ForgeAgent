@@ -5,7 +5,7 @@
 
 ## Live judge demo
 
-**[Open the Forge Ledger →](https://yashasm18.github.io/ForgeAgent/?v=8cb527f)** — a
+**[Open the Forge Ledger →](https://yashasm18.github.io/ForgeAgent/?v=8c87a49)** — a
 no-install judge walkthrough of ForgeAgent’s trust model. It includes a
 clickable **ForageGraph**, an interactive browser capability run, a policy
 attack lab, version lineage, and evidence-backed reuse.
@@ -89,7 +89,7 @@ structured, audit-safe analysis path for arbitrary incident text in Python.
 Use the hosted demo here:
 
 ```text
-https://yashasm18.github.io/ForgeAgent/?v=8cb527f
+https://yashasm18.github.io/ForgeAgent/?v=8c87a49
 ```
 
 The versioned URL bypasses any cached GitHub Pages 404 response. GitHub Pages
