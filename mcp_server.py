@@ -10,10 +10,22 @@ from typing import Any
 
 from agent import BLUEPRINTS
 from control_plane import ControlPlane
-from foundry import CapabilityFoundry
 from platform_store import PlatformStore
 from repository_graph import RepositoryGraph
 from sandbox import execute
+
+
+# These tools operate in a team/project namespace. Their capability memory is
+# exclusively the approval-aware PlatformStore/ControlPlane boundary; local
+# ToolRegistry JSON belongs only to non-MCP CLI demonstrations.
+PROJECT_SCOPED_TOOLS = frozenset({
+    "forge_list_capabilities",
+    "forge_get_audit_receipt",
+    "forge_request_capability",
+    "forge_run_trusted_capability",
+    "forge_get_approval_status",
+    "forge_get_metrics",
+})
 
 
 def tools() -> list[dict[str, object]]:
@@ -92,8 +104,7 @@ def call(name: str, arguments: dict[str, Any], store: PlatformStore, plane: Cont
         reused = _run_project_trusted_capability(project_store, project_id, str(arguments["task"]), dict(arguments["payload"]))
         if reused is not None:
             return reused
-        foundry = CapabilityFoundry("data/tool_registry.json", project_id=str(arguments["project_id"]), root=".")
-        return foundry.run(str(arguments["task"]), dict(arguments["payload"]), approval_policy="auto")
+        raise ValueError("No approved trusted capability exists in this project namespace. Request and approve it before reuse.")
     if name == "forge_get_approval_status":
         project_id = str(arguments["project_id"])
         return {"capabilities": [asdict(record) for record in project_store.list(project_id)], "receipt": project_store.receipt(project_id)}
