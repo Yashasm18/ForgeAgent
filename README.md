@@ -5,15 +5,10 @@
 
 ## Live judge demo
 
-**[Open the Forge Ledger →](https://yashasm18.github.io/ForageAgent/)** — a
-no-install judge experience with a preloaded autonomy run, an interactive
-browser capability run, and a **Forge Challenge** that demonstrates rejection,
-repair, verification, lineage, and rollback under judge-selected failures.
-
-The hosted experience also includes **ForageGraph** (a clickable,
-time-replayable capability graph) and **Mission Control**: curated key-free
-skill forging, browser-memory counters, promotion modes, an evaluation arena,
-and downloadable audit receipts.
+**[Open the Forge Ledger →](https://yashasm18.github.io/ForgeAgent/?v=8cb527f)** — a
+no-install judge walkthrough of ForgeAgent’s trust model. It includes a
+clickable **ForageGraph**, an interactive browser capability run, a policy
+attack lab, version lineage, and evidence-backed reuse.
 
 Long-running agents need to acquire small capabilities as work changes, but
 blindly executing generated code creates a memory full of unproven behavior.
@@ -48,12 +43,11 @@ does not claim to be a live model call.
 ## Hosted judge demo
 
 `demo/` is a no-install, static Forge Ledger designed for the Devpost
-**judge-testing** field. It contains a preloaded autonomy run for immediate
-review plus an interactive, deterministic browser run: paste an incident and
-execute PII redaction, risk triage, and feedback-term extraction. Its Forge
-Challenge additionally lets reviewers inject broken, unsafe, contract-violating,
-or regressing candidates and watch the trust ledger repair or roll them back.
-Neither requires an API key.
+**judge-testing** field. It follows a short judge path: inspect the capability
+graph, run a private incident through the trusted chain, then inject a bad
+candidate in the **Policy Attack Lab**. The interactive run performs
+deterministic PII redaction, risk triage, and feedback-term extraction in the
+browser. Neither requires an API key.
 
 The interactive redactor removes emails, phone numbers, card-like values, and
 explicitly labelled secrets such as secret codes, passwords, OTPs, API keys,
@@ -63,11 +57,12 @@ structured, audit-safe analysis path for arbitrary incident text in Python.
 Use the hosted demo here:
 
 ```text
-https://yashasm18.github.io/ForageAgent/
+https://yashasm18.github.io/ForgeAgent/?v=8cb527f
 ```
 
-GitHub Pages serves the static `demo/` directory from the `gh-pages` branch.
-The full local ledger remains available through `python3 main.py --serve`.
+The versioned URL bypasses any cached GitHub Pages 404 response. GitHub Pages
+deploys the static `demo/` directory through the repository workflow. The full
+local ledger remains available through `python3 main.py --serve`.
 
 The dashboard now also shows the **Evidence Trail**: every capability request,
 policy rejection, verification result, trusted reuse, and execution is stored
