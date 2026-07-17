@@ -1,120 +1,71 @@
 # ForgeAgent — verified skill memory for AI agents
 
-> GPT-5.6 may propose a new agent capability. ForgeAgent decides whether it has
-> earned trust.
+ForgeAgent helps AI coding agents and developer teams turn generated code into verified, reusable capabilities before it is allowed to run again.
 
-Long-running agents need to acquire small capabilities as work changes, but
-blindly executing generated code creates a memory full of unproven behavior.
-ForgeAgent turns each capability gap into a disciplined loop: **propose →
-policy-check → isolate → prove → persist → reuse**.
+## The hook story
+
+A generated capability could alias `__import__` and attempt to bypass the sandbox policy gate. ForgeAgent closes that class twice: a static AST check rejects it before execution, and the runtime replaces imports with the `safe_import` allowlist in [`sandbox.py`](sandbox.py); both protections are exercised by [`tests/test_sandbox_security.py`](tests/test_sandbox_security.py).
+
+AI agents are increasingly allowed to write and run their own code; without a system like this, that trust is assumed, not earned.
+
+## Demo video
+
+▶ **Demo video — link coming soon**
+
+<!-- Paste the real YouTube embed or walkthrough link here before submission. -->
+
+## Architecture
+
+This is the runnable local system: agents reach an MCP server, governed capabilities are proved and remembered, and later agents can reuse trusted work without rebuilding it.
+
+![ForgeAgent architecture](docs/forgeagent-architecture.png)
 
 ## Proof at a glance
 
-```text
-Generate fresh, local evidence with no API key:
-python3 main.py --benchmark
-python3 main.py --evaluate
-python3 main.py --compare
-python3 scripts/generate_benchmark_chart.py
-```
+All figures below were generated locally without an API key on July 17, 2026.
 
-The chart below is generated from a fresh local run of the trust-gate,
-evaluation, and comparison commands—never hand-entered metrics. Regenerate it
-with `python3 scripts/generate_benchmark_chart.py`.
+| Evidence | Measured result | Source command |
+| --- | --- | --- |
+| Regression suite | 42/42 tests passed | `python3 -m unittest discover -s tests -v` |
+| Trust-gate benchmark | 8/8 cases passed; 7/7 attack patterns blocked | `python3 main.py --benchmark` |
+| Evaluation arena | 50/50 cases passed; 10/10 unsafe proposals rejected | `python3 main.py --evaluate` |
+| Stateless comparison | 36 new skills; 0 reuses | `python3 main.py --compare` |
+| ForgeAgent comparison | 4 new skills; 32 reuses | `python3 main.py --compare` |
+
+The chart is generated from those commands, not hand-entered metrics. Regenerate it with `python3 scripts/generate_benchmark_chart.py`.
 
 ![ForgeAgent benchmark evidence](docs/benchmark-results.svg)
 
-![Forge Ledger preview](docs/screenshot-ledger.png)
+## Quickstart
 
-## Live judge demo
-
-**[Open the Forge Ledger →](https://yashasm18.github.io/ForgeAgent/?v=3bd7ed2)** — a
-no-install walkthrough with the clickable **ForgeGraph**, a browser capability
-run, Policy Attack Lab, version lineage, and Production Preflight.
-
-Why not regenerate a tool every time? This recorded comparison shows the second
-workflow needed **32 fewer new skills** and reused **32 proof-backed capabilities**
-instead of treating every task as new code.
-
-## Install and use
-
-### 1. Get the project
+Python 3.10+ is the only requirement for the offline judge path—no packages or API key are needed.
 
 ```bash
 git clone https://github.com/Yashasm18/ForgeAgent.git
 cd ForgeAgent
+python3 main.py --demo --reset && python3 main.py --demo
 python3 -m unittest discover -s tests -v
 ```
 
-Requirements: Python 3.10+; no Python packages or API key are required for the
-offline demo. Docker Desktop is optional and only needed for container-isolation
-validation.
+The first command forges curated offline capabilities after proof; the second demonstrates their verified reuse. For the local visual ledger, run `python3 main.py --serve` and open `http://127.0.0.1:8787`.
 
-### 2. Use it from the command line
+## What's implemented
 
-```bash
-# Show a verified create → reuse lifecycle.
-python3 main.py --demo --reset
-python3 main.py --demo
+| Capability | What is real now | Where to verify it |
+| --- | --- | --- |
+| Governed capability lifecycle | Propose, policy-check, isolate, prove, persist, version, and reuse constrained `run(payload)` capabilities. | [`foundry.py`](foundry.py), [`proof_engine.py`](proof_engine.py), `python3 main.py --foundry-task "Normalize inconsistent date formats in this import log" --payload '{"text":"batch=A 03/07/2026"}'` |
+| Cross-agent reuse | A capability approved by one real MCP subprocess is reused by a separate OS process from the SQLite platform store. | [`tests/test_mcp_server.py`](tests/test_mcp_server.py) |
+| Adversarial proof | An opt-in live GPT-5.6 adversarial pass creates contract-breaking cases; a failure blocks promotion and enters repair evidence. A labelled offline recorded example is also included. | [`generator.py`](generator.py), [`proof_engine.py`](proof_engine.py), [`demo_tasks.py`](demo_tasks.py) |
+| Semantic matching | When a live generator is configured, existing capabilities are matched by task intent; unavailable or failed live matching falls back to the existing offline keywords. | [`agent.py`](agent.py), [`generator.py`](generator.py) |
+| Structured outputs | The three live GPT-5.6 calls enforce JSON Schemas through the Responses API before parsing. | [`generator.py`](generator.py) |
+| Live Foundry Council | The dashboard polls newly appended council decisions from the SQLite + JSONL audit trail while a Foundry run is active. | [`dashboard.py`](dashboard.py), [`audit.py`](audit.py), `python3 main.py --serve` |
+| Accurate proof evidence | Capability records persist the actual passing proof-case count; the dashboard shows evidence unavailable rather than inventing a fallback value. | [`registry.py`](registry.py), [`dashboard.py`](dashboard.py) |
+| Reproducible evaluation | The benchmark chart is regenerated from the local benchmark, evaluation, and comparison commands. | [`scripts/generate_benchmark_chart.py`](scripts/generate_benchmark_chart.py) |
+| Production reference profile | An optional rootless, no-egress container profile and stricter approval policy are available for validation. | [`Dockerfile.sandbox`](Dockerfile.sandbox), [`compose.production.yml`](compose.production.yml) |
 
-# Ask the Foundry to govern a supported capability request.
-python3 main.py --foundry-task "Normalize inconsistent date formats in this import log" \
-  --payload '{"text":"batch=A 03/07/2026; batch=B 2026/7/4"}'
+## Live judge demo
 
-# Opt in to a second live GPT-5.6 call that attacks a proposed capability
-# with 2–4 adversarial contract cases before promotion.
-OPENAI_API_KEY=... python3 main.py --foundry-task "Extract invoice IDs" \
-  --foundry-live --adversarial-proof --payload '{"text":"INV-1042 failed"}'
-
-# Run the evidence suite.
-python3 main.py --evaluate
-```
-
-### 3. Use it with Codex, Cursor, or Claude Code through MCP
-
-Copy the MCP config and replace the absolute project path:
-
-```json
-{
-  "mcpServers": {
-    "forgeagent-foundry": {
-      "command": "python3",
-      "args": ["/absolute/path/to/ForgeAgent/mcp_server.py"]
-    }
-  }
-}
-```
-
-Then ask your coding agent: **“Inspect ForgeAgent capability memory before
-creating a new parser, validator, or extractor.”** It can use
-`forge_inspect_repository`, `forge_request_capability`,
-`forge_run_trusted_capability`, and approval/audit tools.
-
-For exact Codex, Cursor, and Claude Code registration steps, see
-[INTEGRATIONS.md](docs/INTEGRATIONS.md).
-
-### 4. Run the local team control plane
-
-```bash
-python3 main.py --api
-```
-
-In a second terminal, create a project. The response returns a one-time
-bootstrap bearer token; store it privately and do not commit it.
-
-```bash
-curl -X POST http://127.0.0.1:8090/v1/projects \
-  -H 'Content-Type: application/json' \
-  -d '{"project_id":"team/invoices","owner":"alice"}'
-```
-
-### 5. Open the visual demo
-
-```bash
-python3 main.py --serve
-```
-
-Open `http://127.0.0.1:8787`, or use the hosted no-install demo above.
+**[Open the Forge Ledger →](https://yashasm18.github.io/ForgeAgent/?v=3bd7ed2)** — a no-install walkthrough with the clickable **ForgeGraph**, browser capability run, Policy Attack Lab, version lineage, and Production Preflight.
 
 ## Capability Foundry
 
@@ -165,22 +116,6 @@ The result is capability governance, not cached model output: source,
 provenance, tests, policy decision, approval, and rollback state travel with
 the reusable tool.
 
-## What changed: from demo to Capability Foundry
-
-ForgeAgent now demonstrates a complete governed capability lifecycle rather
-than only a single agent workflow:
-
-| Layer | What is implemented | Why it matters |
-| --- | --- | --- |
-| Capability factory | Planner, builder, security, evaluator, and governor roles; bounded repair attempts | A failed candidate is evidence for repair, not an unreviewed tool in memory. |
-| Repository intelligence | AST/docs repository graph, search, and impact hints | The agent can look for existing capability context before duplicating work. |
-| Adversarial proof | Static policy gate plus normal, edge, and contract proof cases | Generated code must meet a narrow JSON contract before it is trusted. |
-| Persistent memory | SQLite project namespaces, capability versions, proofs, approvals, receipts, rollback | Improvement survives a session without mixing one team's memory with another's. |
-| MCP integration | Stdio MCP server and example client configuration | Coding agents can inspect governed capabilities as a developer tool. |
-| Evaluation arena | 50 deterministic cases: safe tools, unsafe proposals, privacy-first incidents | Claims are measured locally rather than presented as invented benchmark numbers. |
-| Production profile | Rootless/read-only container, egress disabled, resource limits, approval gates | The security story extends beyond a browser or local subprocess. |
-| Control-plane foundation | Tenant roles, hashed API tokens, local HTTP API, MCP v2 request/run/status tools | Teams can integrate governed capability lifecycle into coding-agent workflows. |
-
 ## Who uses it and when
 
 - **Coding agents and developer teams:** avoid regenerating a parser, validator,
@@ -216,7 +151,7 @@ python3 main.py --compare
 ```
 
 Open `http://127.0.0.1:8787` to see the **Forge Ledger**. The first demo run
-creates two curated offline skills; the second proves that verified memory is
+creates curated offline skills; the second proves that verified memory is
 reused. The curated mode is intentionally labelled as a recording fallback—it
 does not claim to be a live model call.
 
@@ -326,9 +261,8 @@ The dashboard now also shows the **Evidence Trail**: every capability request,
 policy rejection, verification result, trusted reuse, and execution is stored
 in `data/audit_log.jsonl`.
 
-`--benchmark` evaluates the trust gate against five representative cases:
-safe code, filesystem access, network access, dynamic execution, and a broken
-tool contract. `--showcase` is the recording-ready workflow: redact sensitive
+`--benchmark` evaluates the trust gate against safe code, filesystem access,
+network access, dynamic execution, and broken-tool-contract cases. `--showcase` is the recording-ready workflow: redact sensitive
 support data, explain customer risk, and reuse those proven capabilities on the
 next pass.
 
@@ -390,7 +324,7 @@ as `null` when no model call was made.
 
 GitHub Actions continuously watches the repository through
 [`ci.yml`](.github/workflows/ci.yml): every push and pull request to `main`
-runs the 33-test proof suite, compiles Python, validates the hosted-demo
+runs the full proof suite, compiles Python, validates the hosted-demo
 JavaScript, checks production assets, builds the rootless sandbox image, and
 executes a small no-egress container capability. A scheduled daily health run
 catches environmental regressions even when no one is pushing code.
@@ -476,4 +410,4 @@ policy/test rejection.
 - Offline proof: `python3 main.py --demo --reset`.
 - Live GPT-5.6 proof: set `OPENAI_API_KEY` and use `--forge` as above.
 - Visual inspection: `python3 main.py --serve`.
-- Verification snapshot: `python3 -m unittest discover -s tests -v` (33 tests).
+- Verification snapshot: `python3 -m unittest discover -s tests -v`.
