@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from agent import BLUEPRINTS, ForgeAgent
-from generator import ProposalGenerator, ToolProposal
+from generator import ProofCase, ProposalGenerator, ToolProposal
 from platform_store import PlatformStore
 from proof_engine import ProofEngine
 from repository_graph import RepositoryGraph
@@ -39,11 +39,13 @@ class CapabilityFoundry:
         existing = self.registry.get(capability)
         return {"capability": capability, "existing_trusted_tool": asdict(existing) if existing else None, "repository_matches": graph.query(capability), "impact": graph.impact(capability), "graph": graph.export()}
 
-    def run(self, task: str, payload: dict[str, object], approval_policy: str = "auto", max_repairs: int = 2) -> dict[str, object]:
+    def run(self, task: str, payload: dict[str, object], approval_policy: str = "auto", max_repairs: int = 2, adversarial_proof: bool = False) -> dict[str, object]:
         blueprint = next((item for item in BLUEPRINTS if item.matches(task)), None)
         capability = blueprint.name if blueprint else self._slug(task)
         inspection = self.inspect(capability)
         decisions = [CouncilDecision("planner", "complete", f"Task maps to capability '{capability}'.")]
+        if adversarial_proof and self.generator is None:
+            raise RuntimeError("Live adversarial proof requires OPENAI_API_KEY and a GPT-5.6 generator; offline mode remains unchanged without --adversarial-proof.")
         if inspection["existing_trusted_tool"]:
             if approval_policy == "production":
                 decisions.extend([
@@ -62,7 +64,10 @@ class CapabilityFoundry:
             decisions.append(CouncilDecision("builder", "complete" if attempt == 0 else "repaired", f"Produced constrained candidate '{proposal.name}' (attempt {attempt + 1})."))
             threat = self.proofs.threat_model(proposal)
             decisions.append(CouncilDecision("security", "complete", f"Threat model found {len(threat['policy_findings'])} policy findings."))
-            report = self.proofs.evaluate(proposal)
+            adversarial_cases = self._adversarial_cases(proposal) if adversarial_proof else []
+            if adversarial_cases:
+                decisions.append(CouncilDecision("security", "complete", f"GPT-5.6 supplied {len(adversarial_cases)} adversarial proof cases."))
+            report = self.proofs.evaluate(proposal, adversarial_cases=adversarial_cases)
             decisions.append(CouncilDecision("evaluator", "passed" if report["passed"] else "rejected", f"Trust score {report['trust_score']}; {report['failure_count']} proof failures."))
             if report["passed"] or not self.generator or attempt == max_repairs:
                 break
@@ -88,6 +93,15 @@ class CapabilityFoundry:
         if blueprint is None:
             raise RuntimeError("A live gpt-5.6-terra generator is required for an unknown capability. Set OPENAI_API_KEY or choose a supported curated capability.")
         return ToolProposal(blueprint.name, blueprint.description, blueprint.source, ((blueprint.test_input, blueprint.expected_output),), "curated offline Foundry proposal")
+
+    def _adversarial_cases(self, proposal: ToolProposal) -> list[ProofCase]:
+        generator = self.generator
+        if generator is None or not hasattr(generator, "propose_adversarial_cases"):
+            raise RuntimeError("Configured live generator does not support adversarial proof generation.")
+        cases = generator.propose_adversarial_cases(proposal)
+        if not cases:
+            raise RuntimeError("Live adversarial proof generation returned no cases; refusing promotion.")
+        return cases
 
     @staticmethod
     def _slug(task: str) -> str:

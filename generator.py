@@ -25,8 +25,19 @@ class ToolProposal:
     provenance: str
 
 
+@dataclass(frozen=True)
+class ProofCase:
+    """One expected-result case, including dynamically generated adversarial evidence."""
+
+    category: str
+    input: object
+    expected_output: object
+    rationale: str
+
+
 class ProposalGenerator(Protocol):
     def propose(self, capability: str, payload: object) -> ToolProposal: ...
+    def propose_adversarial_cases(self, proposal: ToolProposal) -> list[ProofCase]: ...
 
 
 class GeneratorError(RuntimeError):
@@ -46,6 +57,16 @@ PLAN_PROMPT = """You are ForgeAgent's capability planner. Return JSON only:
 Decompose the user request into the minimum dependency-ordered, independently
 verifiable capabilities. Do not invent external side effects. Every step payload
 must be JSON-compatible. Use at most five steps."""
+
+ADVERSARIAL_PROMPT = """You are ForgeAgent's adversarial proof author. Read the
+candidate source and its stated JSON contract. Return JSON only in this form:
+{"cases":[{"input":{},"expected_output":{},"rationale":"why this input
+could expose a contract, correctness, or exception bug"}]}
+Propose 2 to 4 JSON-compatible inputs that are specifically likely to make the
+candidate return an incorrect result or raise unexpectedly. expected_output
+must be the correct JSON-compatible result required by the stated contract.
+Do not propose filesystem, network, reflection, dynamic execution, or any
+non-JSON input. Do not change the candidate source."""
 
 
 class GPT56Generator:
@@ -71,6 +92,19 @@ class GPT56Generator:
             return steps
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise GeneratorError("GPT-5.6 plan was not valid ForgeAgent JSON") from exc
+
+    def propose_adversarial_cases(self, proposal: ToolProposal) -> list[ProofCase]:
+        """Ask GPT-5.6 to attack a candidate before it can earn trust."""
+        if not self.api_key:
+            raise GeneratorError("OPENAI_API_KEY is required for live adversarial proof generation")
+        candidate = {
+            "name": proposal.name,
+            "description": proposal.description,
+            "source": proposal.source,
+            "existing_tests": [{"input": input_value, "expected_output": expected} for input_value, expected in proposal.tests],
+        }
+        text = self._complete(ADVERSARIAL_PROMPT, f"Candidate to attack:\n{json.dumps(candidate)}")
+        return _parse_adversarial_cases(text)
 
     def _complete(self, system_prompt: str, user_text: str) -> str:
         request_body = {
@@ -109,3 +143,21 @@ def _parse_proposal(text: str, provenance: str) -> ToolProposal:
         return ToolProposal(data["name"], data["description"], data["source"], tests, provenance)
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise GeneratorError("GPT-5.6 proposal was not valid ForgeAgent JSON") from exc
+
+
+def _parse_adversarial_cases(text: str) -> list[ProofCase]:
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    try:
+        data = json.loads(fenced.group(1) if fenced else text)
+        raw_cases = data["cases"]
+        if not isinstance(raw_cases, list) or not 2 <= len(raw_cases) <= 4:
+            raise ValueError("expected 2-4 adversarial cases")
+        cases = [ProofCase("adversarial", item["input"], item["expected_output"], item["rationale"]) for item in raw_cases]
+        for case in cases:
+            json.dumps(case.input)
+            json.dumps(case.expected_output)
+            if not isinstance(case.rationale, str) or not case.rationale.strip():
+                raise ValueError("missing adversarial rationale")
+        return cases
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise GeneratorError("GPT-5.6 adversarial proof cases were not valid ForgeAgent JSON") from exc

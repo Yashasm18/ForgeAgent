@@ -6,16 +6,8 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Iterable
 
-from generator import ToolProposal
+from generator import ProofCase, ToolProposal
 from sandbox import SandboxError, execute, policy_violations
-
-
-@dataclass(frozen=True)
-class ProofCase:
-    category: str
-    input: object
-    expected_output: object
-    rationale: str
 
 
 @dataclass(frozen=True)
@@ -30,10 +22,15 @@ class ProofEngine:
     """Combines policy, contract, deterministic, and adversarial evidence."""
 
     REQUIRED_CATEGORIES = ("normal", "edge", "contract")
+    OPTIONAL_CATEGORIES = ("adversarial",)
 
-    def evaluate(self, proposal: ToolProposal, cases: Iterable[ProofCase] | None = None) -> dict[str, object]:
+    def evaluate(self, proposal: ToolProposal, cases: Iterable[ProofCase] | None = None, adversarial_cases: Iterable[ProofCase] | None = None) -> dict[str, object]:
         findings = policy_violations(proposal.source)
         proof_cases = list(cases or self._default_cases(proposal))
+        supplied_adversarial = list(adversarial_cases or ())
+        if any(case.category != "adversarial" for case in supplied_adversarial):
+            raise ValueError("adversarial proof cases must use the adversarial category")
+        proof_cases.extend(supplied_adversarial)
         results: list[ProofResult] = []
         if findings:
             results.append(ProofResult("policy", False, "Static policy gate", "; ".join(findings)))
@@ -46,7 +43,10 @@ class ProofEngine:
         if missing:
             results.append(ProofResult("coverage", False, "Required test categories", f"Missing: {', '.join(missing)}"))
         else:
-            results.append(ProofResult("coverage", True, "Required test categories", "normal, edge, and contract cases supplied."))
+            detail = "normal, edge, and contract cases supplied."
+            if supplied_adversarial:
+                detail += f" {len(supplied_adversarial)} adversarial cases supplied."
+            results.append(ProofResult("coverage", True, "Required test categories", detail))
         passed = all(result.passed for result in results)
         trust_score = self._score(results)
         return {"passed": passed, "trust_score": trust_score, "policy_findings": findings, "results": [asdict(result) for result in results], "coverage": sorted(categories), "failure_count": sum(not result.passed for result in results)}

@@ -12,9 +12,9 @@ policy-check → isolate → prove → persist → reuse**.
 
 ```text
 Measured locally with: python3 main.py --compare
-Stateless agent:  36 new skills · 0 reuses · 2058.4 ms
-ForgeAgent:       4 new skills · 32 reuses · 1478.3 ms
-# Same 18-step recurring workflow: 28.2% lower elapsed time in this recorded run.
+Stateless agent:  36 new skills · 0 reuses · 2023.4 ms
+ForgeAgent:       4 new skills · 32 reuses · 1179.2 ms
+# Same 18-step recurring workflow: 41.7% lower elapsed time in this recorded run.
 
 Measured locally with: python3 main.py --evaluate
 50 / 50 deterministic cases passed · 10 / 10 unsafe proposals rejected · $0 API cost
@@ -56,6 +56,11 @@ python3 main.py --demo
 # Ask the Foundry to govern a supported capability request.
 python3 main.py --foundry-task "Normalize inconsistent date formats in this import log" \
   --payload '{"text":"batch=A 03/07/2026; batch=B 2026/7/4"}'
+
+# Opt in to a second live GPT-5.6 call that attacks a proposed capability
+# with 2–4 adversarial contract cases before promotion.
+OPENAI_API_KEY=... python3 main.py --foundry-task "Extract invoice IDs" \
+  --foundry-live --adversarial-proof --payload '{"text":"INV-1042 failed"}'
 
 # Run the evidence suite.
 python3 main.py --evaluate
@@ -217,6 +222,22 @@ let `gpt-5.6-terra` plan and propose an unknown capability. `--repo-graph`
 exports the repository graph, `--evaluate` runs 50 measured cases, and `--mcp`
 starts the stdio MCP server for compatible coding agents.
 
+### Optional live adversarial proof
+
+`--adversarial-proof` is deliberately opt-in and requires `--foundry-live` plus
+`OPENAI_API_KEY`. After the builder proposes a candidate, a second GPT-5.6 call
+must return 2–4 JSON adversarial cases targeted at that candidate’s contract.
+ForgeAgent runs those cases through the same isolated sandbox as normal, edge,
+and contract proof. Any mismatch or exception blocks promotion and becomes
+repair evidence. If live adversarial generation is requested without a usable
+live generator, the run fails closed; it never silently skips the category.
+
+For a key-free explanation, [`demo_tasks.py`](demo_tasks.py) includes a clearly
+labelled recorded offline example where a slug normalizer passes its regular
+cases but fails an adversarial repeated-whitespace case. The regular `--demo`,
+`--benchmark`, `--evaluate`, and `--compare` flows make no API calls and remain
+fully offline.
+
 ### Choose a run mode
 
 | Goal | Command | What to look for |
@@ -365,7 +386,7 @@ as `null` when no model call was made.
 
 GitHub Actions continuously watches the repository through
 [`ci.yml`](.github/workflows/ci.yml): every push and pull request to `main`
-runs the 31-test proof suite, compiles Python, validates the hosted-demo
+runs the 33-test proof suite, compiles Python, validates the hosted-demo
 JavaScript, checks production assets, builds the rootless sandbox image, and
 executes a small no-egress container capability. A scheduled daily health run
 catches environmental regressions even when no one is pushing code.
@@ -451,4 +472,4 @@ policy/test rejection.
 - Offline proof: `python3 main.py --demo --reset`.
 - Live GPT-5.6 proof: set `OPENAI_API_KEY` and use `--forge` as above.
 - Visual inspection: `python3 main.py --serve`.
-- Verification snapshot: `python3 -m unittest discover -s tests -v` (31 tests).
+- Verification snapshot: `python3 -m unittest discover -s tests -v` (33 tests).

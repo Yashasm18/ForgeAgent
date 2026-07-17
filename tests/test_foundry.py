@@ -3,7 +3,8 @@ import unittest
 from pathlib import Path
 
 from foundry import CapabilityFoundry
-from generator import ToolProposal
+from generator import ProofCase, ToolProposal
+from demo_tasks import RECORDED_ADVERSARIAL_EXAMPLE
 
 
 class SequenceGenerator:
@@ -12,6 +13,18 @@ class SequenceGenerator:
 
     def propose(self, task, payload):
         return next(self.proposals)
+
+
+class AdversarialGenerator:
+    def __init__(self, proposal, cases):
+        self.proposal = proposal
+        self.cases = cases
+
+    def propose(self, task, payload):
+        return self.proposal
+
+    def propose_adversarial_cases(self, proposal):
+        return self.cases
 
 
 class FoundryTests(unittest.TestCase):
@@ -39,3 +52,35 @@ class FoundryTests(unittest.TestCase):
             outcome = foundry.run("Extract invoice IDs", {"text": "INV-1"})
             self.assertEqual(outcome["status"], "trusted")
             self.assertIn("repair_requested", [entry["status"] for entry in outcome["council"]])
+
+    def test_adversarial_generator_case_blocks_promotion(self):
+        proposal = ToolProposal(
+            "slug_normalizer", "Normalize a release name into a slug.",
+            "def run(payload):\n    return {'slug': payload['name'].strip().lower().replace(' ', '-')}\n",
+            (({"name": "Release Candidate"}, {"slug": "release-candidate"}),),
+            "fake live proposal",
+        )
+        adversarial = ProofCase(
+            "adversarial", {"name": "release  candidate"}, {"slug": "release-candidate"},
+            "Repeated whitespace must collapse to one slug separator.",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            foundry = CapabilityFoundry(
+                Path(directory) / "registry.json", root=directory,
+                generator=AdversarialGenerator(proposal, [adversarial]),
+            )
+            outcome = foundry.run("Normalize a release name", {"name": "release  candidate"}, max_repairs=0, adversarial_proof=True)
+            self.assertEqual(outcome["status"], "rejected")
+            self.assertFalse(outcome["proof"]["passed"])
+            self.assertIn("adversarial", outcome["proof"]["coverage"])
+            self.assertIn("Expected {'slug': 'release-candidate'}, got {'slug': 'release--candidate'}", str(outcome["proof"]["results"]))
+            self.assertEqual(foundry.registry.list(), [])
+
+    def test_offline_curated_flow_is_unchanged_without_adversarial_flag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            foundry = CapabilityFoundry(Path(directory) / "registry.json", root=directory)
+            outcome = foundry.run("Normalize inconsistent date formats in this import log", {"text": "batch=A 03/07/2026"})
+            self.assertEqual(outcome["status"], "trusted")
+            with self.assertRaisesRegex(RuntimeError, "Live adversarial proof requires OPENAI_API_KEY"):
+                foundry.run("Normalize inconsistent date formats in this import log", {"text": "batch=A 03/07/2026"}, adversarial_proof=True)
+            self.assertEqual(RECORDED_ADVERSARIAL_EXAMPLE["label"], "curated offline adversarial proof recording")
