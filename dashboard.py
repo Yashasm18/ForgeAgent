@@ -5,8 +5,38 @@ from __future__ import annotations
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from benchmark import run_safety_benchmark
+
+
+def audit_updates(audit_path: str | Path, since: int = 0) -> dict[str, object]:
+    """Return valid audit entries after a stable, count-based cursor.
+
+    The writer appends one JSON line at a time. A reader can briefly observe an
+    incomplete final line, so it is ignored until it becomes valid rather than
+    advancing the cursor and losing that event.
+    """
+    try:
+        requested_cursor = max(0, int(since))
+    except (TypeError, ValueError):
+        requested_cursor = 0
+    try:
+        lines = Path(audit_path).read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        lines = []
+    entries: list[dict[str, object]] = []
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(entry, dict):
+            entries.append(entry)
+    cursor = min(requested_cursor, len(entries))
+    return {"events": entries[cursor:], "cursor": len(entries)}
 
 PAGE = r'''<!doctype html><html><head><meta charset="utf-8"><title>ForgeAgent — Trust Ledger</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"><style>
@@ -18,34 +48,61 @@ PAGE = r'''<!doctype html><html><head><meta charset="utf-8"><title>ForgeAgent �
 <script>async function load(){let [r,e,b,g]=await Promise.all([fetch('/api/tools'),fetch('/api/events'),fetch('/api/benchmark'),fetch('/api/graph')]),d=await r.json(),a=await e.json(),q=await b.json(),k=await g.json(),t=d.tools||[];count.textContent=t.length;reuses.textContent=t.reduce((a,x)=>a+(x.reuse_count||0),0);tests.textContent=t.reduce((a,x)=>a+(x.tests||[]).length,0);safety.textContent=`${q.passed}/${q.total}`;tools.innerHTML=t.length?t.map(x=>`<article class="tool"><div><code>${x.name}@v${x.version||1}</code><p>${x.description}</p><p>${x.state||'active'} · ${x.tests?.length||1} proof case(s)</p></div><span class="badge">TRUSTED</span></article>`).join(''):'<div class="empty">No tools have earned trust yet. Forge your first capability.</div>';graph.innerHTML=(k.edges||[]).map(x=>`<div class="edge"><b>${x.relation}</b>${x.source.replace('skill:','').replace('task:','task ') } → ${x.target.replace('skill:','')}</div>`).join('')||'<div class="empty">Run the autonomy demo to forge a graph.</div>';events.innerHTML=(a.events||[]).map(x=>`<article class="tool"><div><code>${x.event}</code><p>${x.capability} — ${x.detail}</p><p>${x.created_at}</p></div><span class="badge">${x.outcome.toUpperCase()}</span></article>`).join('')||'<div class="empty">No decisions recorded yet.</div>'}load();setInterval(load,3500);</script></body></html>'''
 
 
-def serve(registry_path: str | Path = "data/tool_registry.json", port: int = 8787) -> None:
+LIVE_COUNCIL_CSS = """
+.live-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.live-state{color:#7ee4c3;font-size:11px;font-weight:800;letter-spacing:.08em}.live-state.offline{color:#f0b86c}.council{display:grid;grid-template-columns:repeat(5,1fr);gap:9px}.council-role{background:#0b1724;border:1px solid #263b4d;border-radius:10px;min-height:126px;padding:11px}.council-role h3{margin:0 0 9px;color:#fff;font-size:12px}.council-event{border-left:2px solid #7ee4c3;padding:7px 8px;margin:6px 0;background:#101f2d;font-size:11px;color:#aabccc}.council-event b{display:block;color:#e8f0f7}.council-event.blocked{border-color:#e06f6f}.council-event.pending{border-color:#f0b86c}.council-event.muted{border-color:#587083}@media(max-width:700px){.council{grid-template-columns:1fr}}
+"""
+
+LIVE_COUNCIL_SECTION = """
+<section class="panel" style="margin-top:14px"><div class="live-head"><h2><span>05 /</span> Live Foundry Council</h2><div class="live-state" id="live-state">CONNECTING…</div></div><p class="empty">New council decisions are read directly from the append-only audit log while a Foundry run is in progress.</p><div class="council" id="council"><div class="empty">Waiting for Council evidence…</div></div></section>
+"""
+
+LIVE_COUNCIL_SCRIPT = r'''<script>
+(()=>{const roles=['planner','builder','security','evaluator','governor'];let cursor=0;let feed=[];const escape=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));const state=status=>/rejected|blocked|failed|denied/.test(status)?'blocked':/pending|repair/.test(status)?'pending':/skipped/.test(status)?'muted':'';function render(){const grouped=Object.fromEntries(roles.map(role=>[role,[]]));feed.filter(event=>String(event.event||'').startsWith('council_')).forEach(event=>{const role=String(event.event).slice('council_'.length);if(grouped[role])grouped[role].push(event)});const seen=roles.some(role=>grouped[role].length);council.innerHTML=seen?roles.map(role=>`<section class="council-role"><h3>${role.toUpperCase()}</h3>${grouped[role].slice(-8).map(event=>`<div class="council-event ${state(String(event.outcome||''))}"><b>${escape(event.outcome||'pending').toUpperCase()}</b>${escape(event.detail)}<br><small>${escape(event.created_at)}</small></div>`).join('')||'<div class="empty">No decision yet.</div>'}</section>`).join(''):'<div class="empty">Waiting for a Foundry run. Open a second terminal and run a new --foundry-task.</div>'}async function poll(){try{const response=await fetch(`/api/audit-log?since=${cursor}`,{cache:'no-store'});if(!response.ok)throw new Error('audit endpoint unavailable');const data=await response.json();cursor=Number(data.cursor||cursor);if(Array.isArray(data.events)&&data.events.length){feed.push(...data.events);render()}liveState.textContent='LIVE / POLLING 1.2s';liveState.className='live-state'}catch(error){liveState.textContent='RETRYING…';liveState.className='live-state offline'}}const liveState=document.getElementById('live-state');poll();setInterval(poll,1200)})();
+</script>'''
+
+# Keep the existing ledger intact and layer the live view into the local page.
+PAGE = PAGE.replace("</style></head>", LIVE_COUNCIL_CSS + "</style></head>")
+PAGE = PAGE.replace("</section></main>\n<script>", LIVE_COUNCIL_SECTION + "</main>\n<script>")
+PAGE = PAGE.replace("</script></body></html>", "</script>" + LIVE_COUNCIL_SCRIPT + "</body></html>")
+
+
+def create_server(
+    registry_path: str | Path = "data/tool_registry.json",
+    host: str = "127.0.0.1",
+    port: int = 8787,
+) -> ThreadingHTTPServer:
+    """Build the local dashboard server for use by the CLI and endpoint tests."""
     path = Path(registry_path)
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
-            if self.path == "/api/tools":
+            request = urlparse(self.path)
+            if request.path == "/api/tools":
                 try:
                     tools = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
                 except json.JSONDecodeError:
                     tools = []
                 body, content_type = json.dumps({"tools": tools}).encode(), "application/json"
-            elif self.path == "/api/events":
+            elif request.path == "/api/events":
                 audit_path = path.parent / "audit_log.jsonl"
                 try:
                     rows = [json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines() if line.strip()]
                 except (FileNotFoundError, json.JSONDecodeError):
                     rows = []
                 body, content_type = json.dumps({"events": list(reversed(rows[-12:]))}).encode(), "application/json"
-            elif self.path == "/api/benchmark":
+            elif request.path == "/api/audit-log":
+                raw_since = parse_qs(request.query).get("since", ["0"])[0]
+                body, content_type = json.dumps(audit_updates(path.parent / "audit_log.jsonl", raw_since)).encode(), "application/json"
+            elif request.path == "/api/benchmark":
                 body, content_type = json.dumps(run_safety_benchmark()).encode(), "application/json"
-            elif self.path == "/api/graph":
+            elif request.path == "/api/graph":
                 graph_path = path.parent / "capability_graph.json"
                 try:
                     graph = json.loads(graph_path.read_text(encoding="utf-8"))
                 except (FileNotFoundError, json.JSONDecodeError):
                     graph = {"nodes": [], "edges": []}
                 body, content_type = json.dumps(graph).encode(), "application/json"
-            elif self.path == "/":
+            elif request.path == "/":
                 body, content_type = PAGE.encode(), "text/html; charset=utf-8"
             else:
                 self.send_error(404)
@@ -59,5 +116,9 @@ def serve(registry_path: str | Path = "data/tool_registry.json", port: int = 878
         def log_message(self, *_: object) -> None:
             return
 
+    return ThreadingHTTPServer((host, port), Handler)
+
+
+def serve(registry_path: str | Path = "data/tool_registry.json", port: int = 8787) -> None:
     print(f"Forge Ledger running at http://127.0.0.1:{port}")
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    create_server(registry_path, port=port).serve_forever()

@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from agent import BLUEPRINTS, ForgeAgent
+from audit import AuditLog
 from generator import ProofCase, ProposalGenerator, ToolProposal
 from platform_store import PlatformStore
 from proof_engine import ProofEngine
@@ -32,6 +33,21 @@ class CapabilityFoundry:
         self.generator = generator
         self.proofs = ProofEngine()
         self.store = PlatformStore(self.registry_path.parent / "foundry.sqlite3")
+        # The Council output was previously returned only after a run finished.
+        # This append-only mirror makes those same decisions observable live.
+        self.audit = AuditLog(self.registry_path.parent / "audit_log.jsonl")
+
+    def _record_decision(
+        self,
+        decisions: list[CouncilDecision],
+        capability: str,
+        role: str,
+        status: str,
+        detail: str,
+    ) -> None:
+        decision = CouncilDecision(role, status, detail)
+        decisions.append(decision)
+        self.audit.record(f"council_{role}", capability, detail, status)
 
     def inspect(self, capability: str) -> dict[str, object]:
         graph = RepositoryGraph(self.root)
@@ -43,48 +59,48 @@ class CapabilityFoundry:
         blueprint = next((item for item in BLUEPRINTS if item.matches(task)), None)
         capability = blueprint.name if blueprint else self._slug(task)
         inspection = self.inspect(capability)
-        decisions = [CouncilDecision("planner", "complete", f"Task maps to capability '{capability}'.")]
+        decisions: list[CouncilDecision] = []
+        self._record_decision(decisions, capability, "planner", "complete", f"Task maps to capability '{capability}'.")
         if adversarial_proof and self.generator is None:
             raise RuntimeError("Live adversarial proof requires OPENAI_API_KEY and a GPT-5.6 generator; offline mode remains unchanged without --adversarial-proof.")
         if inspection["existing_trusted_tool"]:
             if approval_policy == "production":
-                decisions.extend([
-                    CouncilDecision("builder", "skipped", "An existing capability was found; production reuse is still subject to review."),
-                    CouncilDecision("governor", "pending", "Production policy requires a named human approval before reuse."),
-                ])
+                self._record_decision(decisions, capability, "builder", "skipped", "An existing capability was found; production reuse is still subject to review.")
+                self._record_decision(decisions, capability, "governor", "pending", "Production policy requires a named human approval before reuse.")
                 return self._outcome(task, capability, "pending", None, inspection, decisions)
             agent = ForgeAgent(self.registry, emit=lambda _: None)
             result = agent.complete(task, payload)
-            decisions.extend([CouncilDecision("builder", "skipped", "A trusted capability already exists."), CouncilDecision("governor", "reused", f"Reused {capability} without creating new code.")])
+            self._record_decision(decisions, capability, "builder", "skipped", "A trusted capability already exists.")
+            self._record_decision(decisions, capability, "governor", "reused", f"Reused {capability} without creating new code.")
             return self._outcome(task, capability, "reused", result, inspection, decisions)
         proposal = self._proposal(task, payload, blueprint)
         threat: dict[str, object] | None = None
         report: dict[str, object] | None = None
         for attempt in range(max_repairs + 1):
-            decisions.append(CouncilDecision("builder", "complete" if attempt == 0 else "repaired", f"Produced constrained candidate '{proposal.name}' (attempt {attempt + 1})."))
+            self._record_decision(decisions, capability, "builder", "complete" if attempt == 0 else "repaired", f"Produced constrained candidate '{proposal.name}' (attempt {attempt + 1}).")
             threat = self.proofs.threat_model(proposal)
-            decisions.append(CouncilDecision("security", "complete", f"Threat model found {len(threat['policy_findings'])} policy findings."))
+            self._record_decision(decisions, capability, "security", "complete", f"Threat model found {len(threat['policy_findings'])} policy findings.")
             adversarial_cases = self._adversarial_cases(proposal) if adversarial_proof else []
             if adversarial_cases:
-                decisions.append(CouncilDecision("security", "complete", f"GPT-5.6 supplied {len(adversarial_cases)} adversarial proof cases."))
+                self._record_decision(decisions, capability, "security", "complete", f"GPT-5.6 supplied {len(adversarial_cases)} adversarial proof cases.")
             report = self.proofs.evaluate(proposal, adversarial_cases=adversarial_cases)
-            decisions.append(CouncilDecision("evaluator", "passed" if report["passed"] else "rejected", f"Trust score {report['trust_score']}; {report['failure_count']} proof failures."))
+            self._record_decision(decisions, capability, "evaluator", "passed" if report["passed"] else "rejected", f"Trust score {report['trust_score']}; {report['failure_count']} proof failures.")
             if report["passed"] or not self.generator or attempt == max_repairs:
                 break
             failure = "; ".join(result["detail"] for result in report["results"] if not result["passed"])
-            decisions.append(CouncilDecision("planner", "repair_requested", f"Candidate failed proof: {failure}"))
+            self._record_decision(decisions, capability, "planner", "repair_requested", f"Candidate failed proof: {failure}")
             proposal = self.generator.propose(f"{task}\nRepair the prior candidate. Failure evidence: {failure}", payload)
         assert threat is not None and report is not None
         record = self.store.promote(self.project_id, proposal.name, proposal.source, proposal.provenance, report, approval_policy, threat)
         if record.state != "trusted":
-            decisions.append(CouncilDecision("governor", record.state, "Capability was retained as evidence but not executed."))
+            self._record_decision(decisions, capability, "governor", record.state, "Capability was retained as evidence but not executed.")
             return self._outcome(task, capability, record.state, None, inspection, decisions, threat, report, record)
         agent = ForgeAgent(self.registry, emit=lambda _: None)
         # A newly promoted proposal must still replace an existing registry
         # version through the full verification path; never treat a version
         # update as a cache hit.
         result = agent._verify_and_run(proposal, payload, force_candidate=self.registry.get(proposal.name) is not None)
-        decisions.append(CouncilDecision("governor", "trusted", f"Promoted {record.name}@v{record.version} after policy and proof."))
+        self._record_decision(decisions, capability, "governor", "trusted", f"Promoted {record.name}@v{record.version} after policy and proof.")
         return self._outcome(task, capability, "trusted", result, inspection, decisions, threat, report, record)
 
     def _proposal(self, task: str, payload: dict[str, object], blueprint: object | None) -> ToolProposal:
