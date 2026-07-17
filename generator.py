@@ -51,7 +51,7 @@ must be JSON-compatible. Use at most five steps."""
 class GPT56Generator:
     """Minimal stdlib client so the project has no framework dependency."""
 
-    def __init__(self, api_key: str | None = None, model: str = "gpt-5.6"):
+    def __init__(self, api_key: str | None = None, model: str = "gpt-5.6-terra"):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         self.model = model
         if not self.api_key:

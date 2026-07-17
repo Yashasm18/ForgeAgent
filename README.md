@@ -15,6 +15,28 @@ blindly executing generated code creates a memory full of unproven behavior.
 ForgeAgent turns each capability gap into a disciplined loop: **propose →
 policy-check → isolate → prove → persist → reuse**.
 
+## Capability Foundry
+
+ForgeAgent is now a **Capability Foundry**: a governed learning layer for
+coding agents rather than a prompt-only assistant. Given a task, it builds a
+repository intelligence graph, identifies whether a trusted capability already
+exists, produces a constrained proposal, creates a threat model, runs proof
+cases in isolation, records a governed decision, and either executes the
+trusted capability or keeps the rejected evidence for review.
+
+The Foundry Council makes that lifecycle explicit:
+
+- **Planner** maps a task to a capability gap and dependency impact.
+- **Builder** creates a constrained `run(payload)` tool.
+- **Security** derives a threat model and checks the static policy boundary.
+- **Evaluator** runs normal, edge, and contract proof cases in an isolated subprocess.
+- **Governor** promotes, holds for review, rejects, or rolls back a version.
+
+The local-first control plane uses SQLite for project namespaces, trust scores,
+proof reports, approval decisions, audit receipts, and signed capability
+packages. An optional live generator uses `gpt-5.6-terra`; the complete
+offline lifecycle remains runnable without an API key.
+
 ## Why it matters
 
 An agent can now get better over time without quietly accumulating unverified
@@ -29,6 +51,10 @@ python3 main.py --demo --reset
 python3 main.py --demo
 python3 main.py --serve
 python3 main.py --benchmark
+python3 main.py --foundry-task "Find word frequency in this customer feedback" --payload '{"text":"tools tools reliable"}'
+python3 main.py --repo-graph
+python3 main.py --evaluate
+python3 main.py --mcp
 python3 main.py --showcase --reset
 python3 main.py --autonomy-demo --reset
 python3 main.py --autonomy-demo
@@ -39,6 +65,12 @@ Open `http://127.0.0.1:8787` to see the **Forge Ledger**. The first demo run
 creates two curated offline skills; the second proves that verified memory is
 reused. The curated mode is intentionally labelled as a recording fallback—it
 does not claim to be a live model call.
+
+`--foundry-task` runs the five-role council. With a supported capability it
+uses the offline proposal path; add `--foundry-live` and `OPENAI_API_KEY` to
+let `gpt-5.6-terra` plan and propose an unknown capability. `--repo-graph`
+exports the repository graph, `--evaluate` runs 50 measured cases, and `--mcp`
+starts the stdio MCP server for compatible coding agents.
 
 ## Hosted judge demo
 
@@ -122,6 +154,23 @@ timeout-bounded subprocess. Only a passing candidate is stored in
 ```bash
 python3 -m unittest discover -s tests -v
 ```
+
+The evaluation arena is intentionally evidence-first: it runs 50 deterministic
+cases (10 allowed tools, 10 unsafe proposals, and 30 privacy-first incidents),
+reports actual pass/fail, latency, and blocked proposals, and reports API cost
+as `null` when no model call was made.
+
+## MCP and capability packages
+
+`mcp_server.py` exposes a stdio MCP interface for repository inspection,
+capability memory, audit receipts, and human approval decisions. Copy
+[`mcp.config.example.json`](mcp.config.example.json), substitute the absolute
+repository path, and register it in a compatible client such as Codex, Cursor,
+or Claude Code.
+
+The `PlatformStore` can export a trusted capability as an HMAC-SHA256 signed
+package with source, provenance, and proof evidence. Imports always enter
+review state in the receiving project; they cannot silently become trusted.
 
 ## Safety scope
 

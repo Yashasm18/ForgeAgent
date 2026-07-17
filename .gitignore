@@ -2,6 +2,7 @@ __pycache__/
 data/tool_registry.json
 data/capability_graph.json
 data/*.jsonl
+data/*.sqlite3
 .env
 .env.*
 *.key

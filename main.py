@@ -12,7 +12,11 @@ from capability_graph import CapabilityGraph
 from comparison import compare
 from dashboard import serve
 from demo_tasks import DEMO_TASKS, SHOWCASE_TASKS
+from evaluation import run_evaluation_suite
+from foundry import CapabilityFoundry
 from generator import GPT56Generator, GeneratorError
+from mcp_server import main as mcp_main
+from repository_graph import RepositoryGraph
 from registry import ToolRegistry
 from workflows import INCIDENT_RECOVERY_PLAN
 
@@ -26,22 +30,31 @@ def main() -> None:
     parser.add_argument("--compare", action="store_true", help="Compare stateless execution with ForgeAgent memory")
     parser.add_argument("--graph", action="store_true", help="Export ForgeAgent's task-to-capability graph as JSON")
     parser.add_argument("--autonomous-task", help="Use GPT-5.6 to plan, forge, repair, and complete an unknown user task")
+    parser.add_argument("--foundry-task", help="Run the Capability Foundry council on a task")
+    parser.add_argument("--foundry-live", action="store_true", help="Use GPT-5.6-terra for Foundry planning and proposals")
+    parser.add_argument("--project", default="local/default", help="Foundry project namespace")
+    parser.add_argument("--repo-graph", action="store_true", help="Export the repository intelligence graph")
+    parser.add_argument("--evaluate", action="store_true", help="Run the 50-case Foundry Evaluation Arena")
+    parser.add_argument("--mcp", action="store_true", help="Run ForgeAgent's stdio MCP server")
     parser.add_argument("--reset", action="store_true", help="Remove the demo registry before running")
     parser.add_argument("--list-tools", action="store_true", help="List registered verified tools")
     parser.add_argument("--task", help="One supported task")
     parser.add_argument("--text", help="Text input for --task")
     parser.add_argument("--forge", help="Create a new verified tool with GPT-5.6 for this capability")
     parser.add_argument("--payload", help="JSON payload used with --forge")
-    parser.add_argument("--model", default="gpt-5.6", help="OpenAI model for live forging (default: gpt-5.6)")
+    parser.add_argument("--model", default="gpt-5.6-terra", help="OpenAI model for live forging (default: gpt-5.6-terra)")
     parser.add_argument("--serve", action="store_true", help="Open the zero-dependency Forge Ledger dashboard")
     parser.add_argument("--port", type=int, default=8787, help="Dashboard port (default: 8787)")
     args = parser.parse_args()
     registry_path = Path("data/tool_registry.json")
     if args.reset:
-        for artifact in (registry_path, registry_path.parent / "audit_log.jsonl", registry_path.parent / "capability_graph.json"):
+        for artifact in (registry_path, registry_path.parent / "audit_log.jsonl", registry_path.parent / "capability_graph.json", registry_path.parent / "foundry.sqlite3"):
             if artifact.exists():
                 artifact.unlink()
     registry = ToolRegistry(registry_path)
+    if args.mcp:
+        mcp_main()
+        return
     if args.serve:
         serve(registry_path, args.port)
         return
@@ -50,6 +63,22 @@ def main() -> None:
         return
     if args.benchmark:
         print(json.dumps(run_safety_benchmark(), indent=2))
+        return
+    if args.evaluate:
+        print(json.dumps(run_evaluation_suite(), indent=2))
+        return
+    if args.repo_graph:
+        graph = RepositoryGraph(".")
+        print(json.dumps(graph.build(), indent=2))
+        return
+    if args.foundry_task:
+        try:
+            payload = json.loads(args.payload) if args.payload else {"text": args.text or ""}
+            generator = GPT56Generator(model=args.model) if args.foundry_live else None
+            foundry = CapabilityFoundry(registry_path, project_id=args.project, generator=generator)
+            print(json.dumps(foundry.run(args.foundry_task, payload), indent=2))
+        except (json.JSONDecodeError, GeneratorError, RuntimeError) as exc:
+            parser.error(str(exc))
         return
     if args.compare:
         print(json.dumps(compare(INCIDENT_RECOVERY_PLAN), indent=2))
