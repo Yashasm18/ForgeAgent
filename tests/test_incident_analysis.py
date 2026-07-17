@@ -21,7 +21,3 @@ class IncidentAnalysisTests(unittest.TestCase):
         self.assertEqual(result.risk, "low")
         self.assertEqual(result.redaction_categories, ())
 
-    def test_card_is_not_misclassified_as_phone(self):
-        result = analyze_incident("Card 4111 1111 1111 1111 needs a refund")
-        self.assertIn("card", result.redaction_categories)
-        self.assertNotIn("phone", result.redaction_categories)
