@@ -1,0 +1,62 @@
+name: ForgeAgent Continuous Verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Daily health check: GitHub Actions is event-driven, so this complements
+    # push/PR verification instead of pretending to run a permanent process.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forgeagent-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Python proof and demo syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run deterministic proof suite
+        run: python3 -m unittest discover -s tests -v
+      - name: Compile Python modules
+        run: python3 -m py_compile *.py
+      - name: Validate hosted demo JavaScript
+        run: |
+          sed -n '/<script>/,/<\/script>/p' demo/index.html | sed '1d;$d' > /tmp/forgeagent-demo.js
+          node --check /tmp/forgeagent-demo.js
+      - name: Verify production deployment assets
+        run: |
+          test -f Dockerfile.sandbox
+          test -f compose.production.yml
+          test -f container_runner.py
+          test -f governance.py
+
+  sandbox-image:
+    name: Production sandbox image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build rootless sandbox image
+        run: docker build --pull -f Dockerfile.sandbox -t forgeagent-sandbox:ci .
+      - name: Execute a constrained no-egress capability
+        run: |
+          printf '%s\n%s\n' 'def run(payload): return {"value": payload["value"]}' '{"value":"isolated"}' | \
+            docker run --rm -i --network none --read-only --cap-drop ALL \
+              --security-opt no-new-privileges --pids-limit 64 --memory 256m --cpus 0.50 \
+              --tmpfs /tmp:rw,noexec,nosuid,size=16m forgeagent-sandbox:ci

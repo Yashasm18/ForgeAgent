@@ -249,6 +249,22 @@ cases (10 allowed tools, 10 unsafe proposals, and 30 privacy-first incidents),
 reports actual pass/fail, latency, and blocked proposals, and reports API cost
 as `null` when no model call was made.
 
+## Continuous integration and deployment
+
+GitHub Actions continuously watches the repository through
+[`ci.yml`](.github/workflows/ci.yml): every push and pull request to `main`
+runs the 24-test proof suite, compiles Python, validates the hosted-demo
+JavaScript, checks production assets, builds the rootless sandbox image, and
+executes a small no-egress container capability. A scheduled daily health run
+catches environmental regressions even when no one is pushing code.
+
+[`pages.yml`](.github/workflows/pages.yml) is the deployment gate. Any update
+to the hosted demo, Python runtime, or workflow first runs the proof suite and
+demo JavaScript check; only then can it publish the `demo/` directory to GitHub
+Pages. GitHub Actions is event-driven rather than a permanent process, so this
+combination of push/PR events, a scheduled run, and protected deployment is
+the practical “24/7 watch” for a hackathon repository.
+
 ## MCP and capability packages
 
 `mcp_server.py` exposes a stdio MCP interface for repository inspection,
