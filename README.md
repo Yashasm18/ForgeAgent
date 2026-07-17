@@ -11,14 +11,18 @@ policy-check → isolate → prove → persist → reuse**.
 ## Proof at a glance
 
 ```text
-Measured locally with: python3 main.py --compare
-Stateless agent:  36 new skills · 0 reuses · 2023.4 ms
-ForgeAgent:       4 new skills · 32 reuses · 1179.2 ms
-# Same 18-step recurring workflow: 41.7% lower elapsed time in this recorded run.
-
-Measured locally with: python3 main.py --evaluate
-50 / 50 deterministic cases passed · 10 / 10 unsafe proposals rejected · $0 API cost
+Generate fresh, local evidence with no API key:
+python3 main.py --benchmark
+python3 main.py --evaluate
+python3 main.py --compare
+python3 scripts/generate_benchmark_chart.py
 ```
+
+The chart below is generated from a fresh local run of the trust-gate,
+evaluation, and comparison commands—never hand-entered metrics. Regenerate it
+with `python3 scripts/generate_benchmark_chart.py`.
+
+![ForgeAgent benchmark evidence](docs/benchmark-results.svg)
 
 ![Forge Ledger preview](docs/screenshot-ledger.png)
 
