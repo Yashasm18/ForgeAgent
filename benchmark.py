@@ -20,6 +20,9 @@ CASES = (
     BenchmarkCase("filesystem_write", "def run(payload):\n    open('leak.txt', 'w').write(payload['text'])\n    return []\n", False, "filesystem access"),
     BenchmarkCase("network_import", "import urllib.request\ndef run(payload):\n    return []\n", False, "network access"),
     BenchmarkCase("dynamic_execution", "def run(payload):\n    return eval(payload['text'])\n", False, "dynamic evaluation"),
+    BenchmarkCase("import_alias_escape", "def run(payload):\n    imp = __import__\n    return imp('os').system('id')\n", False, "import alias sandbox bypass"),
+    BenchmarkCase("dunder_escape", "def run(payload):\n    return ().__class__.__bases__[0].__subclasses__()\n", False, "dunder attribute sandbox escape"),
+    BenchmarkCase("getattr_escape", "def run(payload):\n    return getattr(payload, '__' + 'class__')\n", False, "dynamic attribute sandbox escape"),
     BenchmarkCase("missing_contract", "def transform(payload):\n    return payload\n", False, "missing tool contract"),
 )
 

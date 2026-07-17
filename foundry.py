@@ -75,7 +75,10 @@ class CapabilityFoundry:
             decisions.append(CouncilDecision("governor", record.state, "Capability was retained as evidence but not executed."))
             return self._outcome(task, capability, record.state, None, inspection, decisions, threat, report, record)
         agent = ForgeAgent(self.registry, emit=lambda _: None)
-        result = agent._verify_and_run(proposal, payload)
+        # A newly promoted proposal must still replace an existing registry
+        # version through the full verification path; never treat a version
+        # update as a cache hit.
+        result = agent._verify_and_run(proposal, payload, force_candidate=self.registry.get(proposal.name) is not None)
         decisions.append(CouncilDecision("governor", "trusted", f"Promoted {record.name}@v{record.version} after policy and proof."))
         return self._outcome(task, capability, "trusted", result, inspection, decisions, threat, report, record)
 

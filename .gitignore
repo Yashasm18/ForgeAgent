@@ -6,3 +6,5 @@ data/*.sqlite3
 .env
 .env.*
 *.key
+output/
+.playwright-cli/

@@ -3,18 +3,34 @@
 > GPT-5.6 may propose a new agent capability. ForgeAgent decides whether it has
 > earned trust.
 
-## Live judge demo
-
-**[Open the Forge Ledger →](https://yashasm18.github.io/ForgeAgent/?v=4cd9ee3)** — a
-no-install judge walkthrough of ForgeAgent’s trust model. It includes a
-clickable **ForageGraph**, an interactive browser capability run, a policy
-attack lab, version lineage, evidence-backed reuse, and an interactive
-**Production Preflight**.
-
 Long-running agents need to acquire small capabilities as work changes, but
 blindly executing generated code creates a memory full of unproven behavior.
 ForgeAgent turns each capability gap into a disciplined loop: **propose →
 policy-check → isolate → prove → persist → reuse**.
+
+## Proof at a glance
+
+```text
+Measured locally with: python3 main.py --compare
+Stateless agent:  6 new skills · 0 reuses · 352.0 ms
+ForgeAgent:       3 new skills · 3 reuses · 258.5 ms
+# Same two-run incident workflow: 26.6% lower elapsed time in this recorded run.
+
+Measured locally with: python3 main.py --evaluate
+50 / 50 deterministic cases passed · 10 / 10 unsafe proposals rejected · $0 API cost
+```
+
+![Forge Ledger preview](docs/screenshot-ledger.png)
+
+## Live judge demo
+
+**[Open the Forge Ledger →](https://yashasm18.github.io/ForgeAgent/?v=4cd9ee3)** — a
+no-install walkthrough with the clickable **ForageGraph**, a browser capability
+run, Policy Attack Lab, version lineage, and Production Preflight.
+
+Why not regenerate a tool every time? This recorded comparison shows the second
+workflow needed **3 fewer new skills** and reused **3 proof-backed capabilities**
+instead of treating every task as new code.
 
 ## Install and use
 
@@ -119,6 +135,26 @@ An agent can now get better over time without quietly accumulating unverified
 code. Every saved skill has source, deterministic test evidence, provenance,
 reuse history, and an append-only decision record. Broken or policy-violating
 candidates are rejected before they can enter memory.
+
+## Isn’t this just caching?
+
+No. Memoization stores an answer for an identical input; ForgeAgent stores a
+**capability version** only after it earns reusable evidence. A blind
+LLM-code cache would save source because it was generated. ForgeAgent instead:
+
+- runs normal, edge, and contract proof categories in
+  [`proof_engine.py`](proof_engine.py) before trust;
+- applies sensitivity and production approval policy in
+  [`governance.py`](governance.py), rather than treating a passing string
+  transform and an external action alike;
+- preserves version lineage and rollback rather than overwriting history; and
+- routes a candidate replacement through the same policy-and-test path in
+  [`agent.py`](agent.py) and [`foundry.py`](foundry.py) before
+  `ToolRegistry.replace` can supersede a trusted version.
+
+The result is capability governance, not cached model output: source,
+provenance, tests, policy decision, approval, and rollback state travel with
+the reusable tool.
 
 ## What changed: from demo to Capability Foundry
 
@@ -329,7 +365,7 @@ as `null` when no model call was made.
 
 GitHub Actions continuously watches the repository through
 [`ci.yml`](.github/workflows/ci.yml): every push and pull request to `main`
-runs the 26-test proof suite, compiles Python, validates the hosted-demo
+runs the 30-test proof suite, compiles Python, validates the hosted-demo
 JavaScript, checks production assets, builds the rootless sandbox image, and
 executes a small no-egress container capability. A scheduled daily health run
 catches environmental regressions even when no one is pushing code.
@@ -415,4 +451,4 @@ policy/test rejection.
 - Offline proof: `python3 main.py --demo --reset`.
 - Live GPT-5.6 proof: set `OPENAI_API_KEY` and use `--forge` as above.
 - Visual inspection: `python3 main.py --serve`.
-- Verification snapshot: `python3 -m unittest discover -s tests -v` (26 tests).
+- Verification snapshot: `python3 -m unittest discover -s tests -v` (30 tests).

@@ -15,4 +15,4 @@ class ProofEngineTests(unittest.TestCase):
         proposal = ToolProposal("bad", "bad", "def run(payload):\n    return eval(payload['text'])\n", (({"text": "1"}, 1),), "test")
         report = ProofEngine().evaluate(proposal)
         self.assertFalse(report["passed"])
-        self.assertIn("disallowed operation: eval", report["policy_findings"])
+        self.assertIn("disallowed name reference: eval", report["policy_findings"])

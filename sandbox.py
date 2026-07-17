@@ -17,10 +17,15 @@ import ast
 from dataclasses import dataclass
 
 ALLOWED_IMPORTS = {"collections", "csv", "datetime", "json", "math", "re", "statistics", "string"}
+FORBIDDEN_NAME_REFERENCES = {
+    "__import__", "eval", "exec", "compile", "open", "globals", "locals", "vars",
+    "getattr", "setattr", "delattr", "__builtins__", "__loader__", "__subclasses__",
+}
 
 RUNNER = r'''
-import ast, json, sys
+import ast, builtins, json, sys
 ALLOWED = __ALLOWED__
+FORBIDDEN = __FORBIDDEN__
 source = json.loads(sys.stdin.readline())
 payload = json.loads(sys.stdin.readline())
 tree = ast.parse(source, mode="exec")
@@ -29,12 +34,18 @@ for node in ast.walk(tree):
         modules = [item.name.split(".")[0] for item in node.names] if isinstance(node, ast.Import) else [(node.module or "").split(".")[0]]
         if any(module not in ALLOWED for module in modules):
             raise RuntimeError("disallowed import")
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"open", "exec", "eval", "compile", "__import__"}:
-        raise RuntimeError("disallowed operation")
-namespace = {"__builtins__": {"__import__": __import__, "abs": abs, "all": all, "any": any, "bool": bool, "dict": dict, "enumerate": enumerate, "float": float, "int": int, "isinstance": isinstance, "len": len, "list": list, "max": max, "min": min, "range": range, "round": round, "set": set, "sorted": sorted, "str": str, "sum": sum, "tuple": tuple, "zip": zip}}
+    if isinstance(node, ast.Name) and (node.id in FORBIDDEN or (node.id.startswith("__") and node.id.endswith("__"))):
+        raise RuntimeError("disallowed name reference")
+    if isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr.endswith("__"):
+        raise RuntimeError("disallowed dunder attribute")
+def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+    if level or name.split(".")[0] not in ALLOWED:
+        raise ImportError("disallowed import")
+    return builtins.__import__(name, globals, locals, fromlist, level)
+namespace = {"__builtins__": {"__import__": safe_import, "abs": abs, "all": all, "any": any, "bool": bool, "dict": dict, "enumerate": enumerate, "float": float, "int": int, "isinstance": isinstance, "len": len, "list": list, "max": max, "min": min, "range": range, "round": round, "set": set, "sorted": sorted, "str": str, "sum": sum, "tuple": tuple, "zip": zip}}
 exec(compile(tree, "generated_tool.py", "exec"), namespace, namespace)
 print(json.dumps({"ok": True, "output": namespace["run"](payload)}, sort_keys=True, default=str))
-'''.replace("__ALLOWED__", repr(ALLOWED_IMPORTS))
+'''.replace("__ALLOWED__", repr(ALLOWED_IMPORTS)).replace("__FORBIDDEN__", repr(FORBIDDEN_NAME_REFERENCES))
 
 
 class SandboxError(RuntimeError):
@@ -77,8 +88,10 @@ def policy_violations(source: str) -> list[str]:
             for module in modules:
                 if module not in ALLOWED_IMPORTS:
                     violations.append(f"disallowed import: {module}")
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in {"open", "exec", "eval", "compile", "__import__"}:
-            violations.append(f"disallowed operation: {node.func.id}")
+        if isinstance(node, ast.Name) and (node.id in FORBIDDEN_NAME_REFERENCES or (node.id.startswith("__") and node.id.endswith("__"))):
+            violations.append(f"disallowed name reference: {node.id}")
+        if isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr.endswith("__"):
+            violations.append(f"disallowed dunder attribute: {node.attr}")
     if not any(isinstance(item, ast.FunctionDef) and item.name == "run" for item in tree.body):
         violations.append("missing run(payload) function")
     return sorted(set(violations))
