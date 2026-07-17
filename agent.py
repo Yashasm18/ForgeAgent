@@ -73,7 +73,7 @@ def run(payload):
     text = re.sub(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}", "[EMAIL]", text)
     text = re.sub(r"(?<!\\w)(?:\\+?\\d[ -]?){8,15}(?!\\w)", "[PHONE]", text)
     text = re.sub(r"\\b(?:\\d[ -]?){13,19}\\b", "[CARD]", text)
-    text = re.sub(r"\\b(secret\\s*(?:code|key)|pass(?:word|code)|otp|pin|api[ _-]?key|access[ _-]?token)\\s*(?:is|:|=)?\\s*[A-Za-z0-9_-]{4,}\\b", r"\\1 [SECRET]", text, flags=re.IGNORECASE)
+    text = re.sub(r"(secret[\\s_-]*(?:code|key)|\\b(?:pass(?:word|code)|otp|pin|api[\\s_-]?key|access[\\s_-]?token)\\b)(?:[\\s:_=-]*(?:is)?[\\s:_=-]*)[A-Za-z0-9_-]{4,}", r"\\1 [SECRET]", text, flags=re.IGNORECASE)
     text = re.sub(r"\\b(secret\\s*message|confidential\\s*message)\\s*(?:is|:|=)\\s*[^.\\n]+", r"\\1: [SECRET_MESSAGE]", text, flags=re.IGNORECASE)
     return text
 ''',

@@ -21,3 +21,8 @@ class IncidentAnalysisTests(unittest.TestCase):
         self.assertEqual(result.risk, "low")
         self.assertEqual(result.redaction_categories, ())
 
+    def test_noisy_embedded_secret_code_is_redacted(self):
+        result = analyze_incident("sahajsecretcodeis9878787mnxc kcxcds")
+        self.assertNotIn("9878787mnxc", result.redacted_text)
+        self.assertIn("secretcode [REDACTED_SECRET]", result.redacted_text)
+        self.assertIn("labelled_secret", result.redaction_categories)

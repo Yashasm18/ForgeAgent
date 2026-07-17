@@ -42,27 +42,25 @@ def analyze_incident(text: str) -> IncidentResult:
         raise TypeError("incident text must be a string")
     categories: list[str] = []
 
-    def replace(pattern: str, replacement: str, category: str, value: str) -> str:
+    def replace(pattern: str, replacement: str, category: str) -> None:
         nonlocal text
         text, count = re.subn(pattern, replacement, text, flags=re.IGNORECASE)
         if count:
             categories.append(category)
-        return text
+        return None
 
-    replace(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", "[REDACTED_EMAIL]", "email", text)
-    replace(r"(?<!\w)(?:\+?\d[\d\s-]{8,}\d)(?!\w)", "[REDACTED_PHONE]", "phone", text)
-    replace(r"\b(?:\d[ -]?){13,19}\b", "[REDACTED_CARD]", "card", text)
+    replace(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", "[REDACTED_EMAIL]", "email")
+    replace(r"\b(?:\d[ -]?){13,19}\b", "[REDACTED_CARD]", "card")
+    replace(r"(?<!\w)(?:\+?\d[\d\s-]{8,}\d)(?!\w)", "[REDACTED_PHONE]", "phone")
     replace(
-        r"\b(secret\s*(?:code|key)|pass(?:word|code)|otp|pin|api[ _-]?key|access[ _-]?token)\s*(?:is|:|=)?\s*[A-Za-z0-9_-]{4,}\b",
+        r"(secret[\s_-]*(?:code|key)|\b(?:pass(?:word|code)|otp|pin|api[\s_-]?key|access[\s_-]?token)\b)(?:[\s:_=-]*(?:is)?[\s:_=-]*)[A-Za-z0-9_-]{4,}",
         r"\1 [REDACTED_SECRET]",
         "labelled_secret",
-        text,
     )
     replace(
         r"\b(secret\s*message|confidential\s*message)\s*(?:is|:|=)\s*[^.\n]+",
         r"\1: [REDACTED_SECRET_MESSAGE]",
         "secret_message",
-        text,
     )
     lowered = text.lower()
     signals = tuple(name for name, phrases in RISK_SIGNALS.items() if any(phrase in lowered for phrase in phrases))
