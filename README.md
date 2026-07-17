@@ -69,8 +69,10 @@ Use the hosted demo here:
 https://yashasm18.github.io/ForageAgent/
 ```
 
-GitHub Pages deploys the static `demo/` directory when a `demo/**` change is
-merged to `main`. The full local ledger remains available through
+GitHub Pages serves the static `demo/` directory from the published `gh-pages`
+branch. The deployment workflow builds the artifact from `demo/`; after a
+website change is merged to `main`, verify the Pages deployment has completed
+before sharing the hosted link. The full local ledger remains available through
 `python3 main.py --serve`.
 
 The dashboard now also shows the **Evidence Trail**: every capability request,
