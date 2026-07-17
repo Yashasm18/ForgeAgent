@@ -8,7 +8,8 @@
 **[Open the Forge Ledger →](https://yashasm18.github.io/ForgeAgent/?v=efdb297)** — a
 no-install judge walkthrough of ForgeAgent’s trust model. It includes a
 clickable **ForageGraph**, an interactive browser capability run, a policy
-attack lab, version lineage, and evidence-backed reuse.
+attack lab, version lineage, evidence-backed reuse, and an interactive
+**Production Preflight**.
 
 Long-running agents need to acquire small capabilities as work changes, but
 blindly executing generated code creates a memory full of unproven behavior.
@@ -44,6 +45,38 @@ code. Every saved skill has source, deterministic test evidence, provenance,
 reuse history, and an append-only decision record. Broken or policy-violating
 candidates are rejected before they can enter memory.
 
+## What changed: from demo to Capability Foundry
+
+ForgeAgent now demonstrates a complete governed capability lifecycle rather
+than only a single agent workflow:
+
+| Layer | What is implemented | Why it matters |
+| --- | --- | --- |
+| Capability factory | Planner, builder, security, evaluator, and governor roles; bounded repair attempts | A failed candidate is evidence for repair, not an unreviewed tool in memory. |
+| Repository intelligence | AST/docs repository graph, search, and impact hints | The agent can look for existing capability context before duplicating work. |
+| Adversarial proof | Static policy gate plus normal, edge, and contract proof cases | Generated code must meet a narrow JSON contract before it is trusted. |
+| Persistent memory | SQLite project namespaces, capability versions, proofs, approvals, receipts, rollback | Improvement survives a session without mixing one team's memory with another's. |
+| MCP integration | Stdio MCP server and example client configuration | Coding agents can inspect governed capabilities as a developer tool. |
+| Evaluation arena | 50 deterministic cases: safe tools, unsafe proposals, privacy-first incidents | Claims are measured locally rather than presented as invented benchmark numbers. |
+| Production profile | Rootless/read-only container, egress disabled, resource limits, approval gates | The security story extends beyond a browser or local subprocess. |
+
+## Who uses it and when
+
+- **Coding agents and developer teams:** avoid regenerating a parser, validator,
+  normalizer, or extractor that has already been proven for the project.
+- **Support and operations agents:** redact incident data before routing,
+  risk-triaging, or extracting recurring failure themes.
+- **Security-conscious teams:** keep unsafe tool proposals as rejected evidence
+  and require named approval before sensitive or production capability reuse.
+- **Platform teams:** export a proof-backed capability package, then import it
+  into another project where it starts in review rather than becoming trusted.
+
+Example: an agent needs an invoice-ID extractor. ForgeAgent first checks
+existing capability memory and repository context. If the capability is
+missing, it produces a constrained `run(payload)` proposal, attacks it with
+policy/proof checks, repairs it when possible, versions it after approval, and
+reuses only the trusted version on the next request.
+
 ## Quick demo (no API key)
 
 ```bash
@@ -72,6 +105,18 @@ let `gpt-5.6-terra` plan and propose an unknown capability. `--repo-graph`
 exports the repository graph, `--evaluate` runs 50 measured cases, and `--mcp`
 starts the stdio MCP server for compatible coding agents.
 
+### Choose a run mode
+
+| Goal | Command | What to look for |
+| --- | --- | --- |
+| Fast offline proof | `python3 main.py --demo --reset` | Curated skills are created only after proof. |
+| Reuse proof | `python3 main.py --demo` | The second run reuses verified skills. |
+| Foundry council | `python3 main.py --foundry-task "Find word frequency" --payload '{"text":"tools tools"}'` | Council decisions, proof, and governed memory record. |
+| Evaluation evidence | `python3 main.py --evaluate` | Actual output across 50 deterministic cases. |
+| Repository intelligence | `python3 main.py --repo-graph` | Queryable code/docs graph export. |
+| Developer-tool mode | `python3 main.py --mcp` | MCP server over standard input/output. |
+| Browser demo | `python3 main.py --serve` | Local Forge Ledger dashboard. |
+
 ## Production isolation and approvals
 
 The default local runner is intentionally frictionless for the judge demo. For
@@ -95,14 +140,35 @@ digest without storing raw incident payloads. In a real deployment, run this
 worker on a dedicated hardened host or orchestration runtime as an additional
 boundary against container escapes.
 
+### Test the production profile
+
+Start Docker Desktop, then run:
+
+```bash
+docker build -f Dockerfile.sandbox -t forgeagent-sandbox:local .
+FORGEAGENT_SANDBOX=container FORGEAGENT_REQUIRE_CONTAINER=1 \
+  python3 -m unittest discover -s tests -v
+```
+
+The production-control tests verify that the generated Docker command has no
+network and no host volumes, strict mode refuses the local fallback, production
+does not silently reuse legacy skills, named human approval is required, and
+audit receipts receive an integrity hash.
+
 ## Hosted judge demo
 
 `demo/` is a no-install, static Forge Ledger designed for the Devpost
 **judge-testing** field. It follows a short judge path: inspect the capability
 graph, run a private incident through the trusted chain, then inject a bad
-candidate in the **Policy Attack Lab**. The interactive run performs
+candidate in the **Policy Attack Lab**, then run **Production Preflight**. The
+interactive run performs
 deterministic PII redaction, risk triage, and feedback-term extraction in the
 browser. Neither requires an API key.
+
+The Production Preflight is deliberately transparent: it simulates and displays
+the same admission contract as the repository (rootless runtime, no host
+mounts, disabled egress, resource limits, and named-human approval), but does
+not claim that a browser itself can enforce OS-level container isolation.
 
 The interactive redactor removes emails, phone numbers, card-like values, and
 explicitly labelled secrets such as secret codes, passwords, OTPs, API keys,
@@ -194,6 +260,19 @@ or Claude Code.
 The `PlatformStore` can export a trusted capability as an HMAC-SHA256 signed
 package with source, provenance, and proof evidence. Imports always enter
 review state in the receiving project; they cannot silently become trusted.
+
+## Repository map
+
+- `foundry.py` — five-role council and governed capability lifecycle.
+- `repository_graph.py` — local code/docs intelligence graph and impact hints.
+- `proof_engine.py` — deterministic/adversarial evidence and trust scoring.
+- `platform_store.py` and `governance.py` — SQLite memory, approval decisions,
+  receipts, packages, and production policy.
+- `sandbox.py`, `container_runner.py`, `Dockerfile.sandbox` — local and
+  hardened container execution profiles.
+- `compose.production.yml` — production runtime reference configuration.
+- `mcp_server.py` — MCP developer-tool surface.
+- `demo/index.html` — hosted, no-key judge experience.
 
 ## Safety scope
 
