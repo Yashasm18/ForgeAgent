@@ -45,6 +45,12 @@ class CapabilityFoundry:
         inspection = self.inspect(capability)
         decisions = [CouncilDecision("planner", "complete", f"Task maps to capability '{capability}'.")]
         if inspection["existing_trusted_tool"]:
+            if approval_policy == "production":
+                decisions.extend([
+                    CouncilDecision("builder", "skipped", "An existing capability was found; production reuse is still subject to review."),
+                    CouncilDecision("governor", "pending", "Production policy requires a named human approval before reuse."),
+                ])
+                return self._outcome(task, capability, "pending", None, inspection, decisions)
             agent = ForgeAgent(self.registry, emit=lambda _: None)
             result = agent.complete(task, payload)
             decisions.extend([CouncilDecision("builder", "skipped", "A trusted capability already exists."), CouncilDecision("governor", "reused", f"Reused {capability} without creating new code.")])
@@ -64,7 +70,7 @@ class CapabilityFoundry:
             decisions.append(CouncilDecision("planner", "repair_requested", f"Candidate failed proof: {failure}"))
             proposal = self.generator.propose(f"{task}\nRepair the prior candidate. Failure evidence: {failure}", payload)
         assert threat is not None and report is not None
-        record = self.store.promote(self.project_id, proposal.name, proposal.source, proposal.provenance, report, approval_policy)
+        record = self.store.promote(self.project_id, proposal.name, proposal.source, proposal.provenance, report, approval_policy, threat)
         if record.state != "trusted":
             decisions.append(CouncilDecision("governor", record.state, "Capability was retained as evidence but not executed."))
             return self._outcome(task, capability, record.state, None, inspection, decisions, threat, report, record)

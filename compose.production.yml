@@ -1,0 +1,20 @@
+# Reference deployment profile. It runs the capability worker without network
+# egress. Put the API/control plane in a separate service/network if needed.
+services:
+  capability-sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+    image: forgeagent-sandbox:local
+    read_only: true
+    user: "10001:10001"
+    network_mode: "none"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.50
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m

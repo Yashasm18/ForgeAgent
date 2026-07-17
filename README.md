@@ -72,6 +72,29 @@ let `gpt-5.6-terra` plan and propose an unknown capability. `--repo-graph`
 exports the repository graph, `--evaluate` runs 50 measured cases, and `--mcp`
 starts the stdio MCP server for compatible coding agents.
 
+## Production isolation and approvals
+
+The default local runner is intentionally frictionless for the judge demo. For
+an actual deployment, ForgeAgent now has a strict container profile: it runs a
+single candidate with **no host mounts, no forwarded environment secrets, no
+network egress, a read-only filesystem, dropped Linux capabilities, no-new-
+privileges, PID/CPU/memory limits, and a non-root user**.
+
+```bash
+docker build -f Dockerfile.sandbox -t forgeagent-sandbox:local .
+FORGEAGENT_SANDBOX=container FORGEAGENT_REQUIRE_CONTAINER=1 \
+  python3 main.py --foundry-task "Find word frequency in this customer feedback" \
+  --approval-policy production --payload '{"text":"tools tools reliable"}'
+```
+
+`compose.production.yml` is a deployable reference profile. The
+`production` approval policy never auto-promotes: even a passing low-risk
+candidate remains pending until a named reviewer records a substantive reason.
+Policy violations are rejected, and receipts include an integrity SHA-256
+digest without storing raw incident payloads. In a real deployment, run this
+worker on a dedicated hardened host or orchestration runtime as an additional
+boundary against container escapes.
+
 ## Hosted judge demo
 
 `demo/` is a no-install, static Forge Ledger designed for the Devpost
@@ -175,19 +198,18 @@ review state in the receiving project; they cannot silently become trusted.
 ## Safety scope
 
 This is defense in depth for a hackathon project, not hardened containment for
-hostile code. Generated tools run in a fresh subprocess with a timeout, a
-temporary working directory, a minimal environment, a restricted builtins set,
-and an import/operation policy. The policy gate is exposed separately before
-execution and every decision is recorded. Production deployment would require
-stronger OS/container isolation, network controls, and human review policies.
+hostile code. Local generated tools run in a fresh subprocess with a timeout,
+a temporary working directory, a minimal environment, a restricted builtins
+set, and an import/operation policy. The production profile adds a rootless,
+read-only container with disabled network egress and constrained resources.
+The policy gate is exposed separately before execution and every decision is
+recorded. A true hostile-code deployment also needs a hardened host, image
+patching, runtime monitoring, and real organisational approval policy.
 
 ## OpenAI Build Week evidence
 
 ForgeAgent is entered in **Developer Tools**. See [HACKATHON_SCOPE.md](HACKATHON_SCOPE.md)
 for the boundary between the earlier prototype and Build Week work.
-
-For an end-to-end architecture, safety, deployment, and judge walkthrough, see
-[MASTER.md](MASTER.md).
 
 Codex accelerated the architecture, safety lifecycle, dashboard, tests, and
 submission materials. GPT-5.6 can be used at runtime, with server-side API
@@ -203,4 +225,4 @@ policy/test rejection.
 - Offline proof: `python3 main.py --demo --reset`.
 - Live GPT-5.6 proof: set `OPENAI_API_KEY` and use `--forge` as above.
 - Visual inspection: `python3 main.py --serve`.
-- Verification snapshot: `python3 -m unittest discover -s tests -v` (8 tests).
+- Verification snapshot: `python3 -m unittest discover -s tests -v` (24 tests).

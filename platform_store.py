@@ -11,6 +11,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from governance import assess, validate_human_decision
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, created_at REAL NOT NULL);
@@ -30,9 +32,6 @@ CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY, project_id TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL, created_at REAL NOT NULL
 );
 """
-
-SENSITIVE_MARKERS = frozenset({"secret", "payment", "finance", "security", "network", "filesystem", "external"})
-
 
 @dataclass(frozen=True)
 class CapabilityRecord:
@@ -57,25 +56,17 @@ class PlatformStore:
         self.db.executescript(SCHEMA)
         self.db.commit()
 
-    def promote(self, project_id: str, name: str, source: str, provenance: str, proof: dict[str, object], policy: str = "auto") -> CapabilityRecord:
-        if policy not in {"auto", "review", "never"}:
-            raise ValueError("policy must be auto, review, or never")
+    def promote(self, project_id: str, name: str, source: str, provenance: str, proof: dict[str, object], policy: str = "auto", threat_model: dict[str, object] | None = None) -> CapabilityRecord:
         if not project_id.strip() or not name.strip():
             raise ValueError("project_id and capability name are required")
         now = time.time()
         self.db.execute("INSERT OR IGNORE INTO projects VALUES (?, ?)", (project_id, now))
         version = self.db.execute("SELECT COALESCE(MAX(version), 0) + 1 FROM capabilities WHERE project_id = ? AND name = ?", (project_id, name)).fetchone()[0]
         capability_id = hashlib.sha256(f"{project_id}:{name}:{version}:{source}".encode()).hexdigest()[:20]
-        sensitive = any(marker in f"{name} {provenance}".lower() for marker in SENSITIVE_MARKERS)
-        proof_passed = bool(proof.get("passed"))
-        if policy == "never" and sensitive:
-            decision, state, reason = "rejected", "rejected", "policy forbids sensitive or external capability"
-        elif policy == "review" or sensitive:
-            decision, state, reason = "pending", "pending", "human approval required"
-        elif proof_passed:
-            decision, state, reason = "approved", "trusted", "policy and proof passed"
-        else:
-            decision, state, reason = "rejected", "rejected", "proof did not pass"
+        governance = assess(policy, name, provenance, proof, threat_model)
+        decision = governance.decision
+        state = {"approved": "trusted", "pending": "pending", "rejected": "rejected"}[decision]
+        reason = governance.reason
         score = int(proof.get("trust_score", 0)) if state != "rejected" else 0
         self.db.execute("INSERT INTO capabilities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (capability_id, project_id, name, version, source, provenance, score, state, now))
         self.db.execute("INSERT INTO proofs(capability_id,result_json,created_at) VALUES (?, ?, ?)", (capability_id, json.dumps(proof, sort_keys=True), now))
@@ -87,6 +78,7 @@ class PlatformStore:
     def decide(self, capability_id: str, decision: str, reviewer: str, reason: str) -> CapabilityRecord:
         if decision not in {"approved", "rejected"}:
             raise ValueError("decision must be approved or rejected")
+        validate_human_decision(reviewer, reason)
         record = self.get(capability_id)
         state = "trusted" if decision == "approved" else "rejected"
         score = max(record.trust_score, 80) if state == "trusted" else 0
@@ -97,6 +89,7 @@ class PlatformStore:
         return self.get(capability_id)
 
     def rollback(self, capability_id: str, reviewer: str, reason: str) -> CapabilityRecord:
+        validate_human_decision(reviewer, reason)
         record = self.get(capability_id)
         self.db.execute("UPDATE capabilities SET state = ?, trust_score = 0 WHERE id = ?", ("rolled_back", capability_id))
         self.db.execute("INSERT INTO approvals(capability_id,policy,decision,reviewer,reason,created_at) VALUES (?, ?, ?, ?, ?, ?)", (capability_id, "human", "rolled_back", reviewer, reason, time.time()))
@@ -118,7 +111,10 @@ class PlatformStore:
         return [CapabilityRecord(**dict(row)) for row in self.db.execute(sql, (project_id,))]
 
     def receipt(self, project_id: str) -> dict[str, object]:
-        return {"project": project_id, "capabilities": [asdict(record) for record in self.list(project_id)], "events": [dict(row) for row in self.db.execute("SELECT kind,detail,created_at FROM events WHERE project_id = ? ORDER BY id", (project_id,))]}
+        payload = {"project": project_id, "capabilities": [asdict(record) for record in self.list(project_id)], "events": [dict(row) for row in self.db.execute("SELECT kind,detail,created_at FROM events WHERE project_id = ? ORDER BY id", (project_id,))]}
+        # The digest is tamper-evident evidence for export/review; raw incident
+        # payloads are never stored in this control-plane receipt.
+        return {**payload, "integrity_sha256": hashlib.sha256(self._canonical(payload)).hexdigest()}
 
     def export_package(self, capability_id: str, signing_key: str) -> dict[str, object]:
         record = self.get(capability_id)

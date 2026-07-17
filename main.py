@@ -33,6 +33,7 @@ def main() -> None:
     parser.add_argument("--foundry-task", help="Run the Capability Foundry council on a task")
     parser.add_argument("--foundry-live", action="store_true", help="Use GPT-5.6-terra for Foundry planning and proposals")
     parser.add_argument("--project", default="local/default", help="Foundry project namespace")
+    parser.add_argument("--approval-policy", choices=("auto", "review", "never", "production"), default="auto", help="Capability promotion policy (production always requires named human approval)")
     parser.add_argument("--repo-graph", action="store_true", help="Export the repository intelligence graph")
     parser.add_argument("--evaluate", action="store_true", help="Run the 50-case Foundry Evaluation Arena")
     parser.add_argument("--mcp", action="store_true", help="Run ForgeAgent's stdio MCP server")
@@ -76,7 +77,7 @@ def main() -> None:
             payload = json.loads(args.payload) if args.payload else {"text": args.text or ""}
             generator = GPT56Generator(model=args.model) if args.foundry_live else None
             foundry = CapabilityFoundry(registry_path, project_id=args.project, generator=generator)
-            print(json.dumps(foundry.run(args.foundry_task, payload), indent=2))
+            print(json.dumps(foundry.run(args.foundry_task, payload, approval_policy=args.approval_policy), indent=2))
         except (json.JSONDecodeError, GeneratorError, RuntimeError) as exc:
             parser.error(str(exc))
         return

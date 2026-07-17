@@ -10,10 +10,11 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import shutil
 import sys
 import tempfile
 import ast
-from pathlib import Path
+from dataclasses import dataclass
 
 ALLOWED_IMPORTS = {"collections", "csv", "datetime", "json", "math", "re", "statistics", "string"}
 
@@ -40,6 +41,29 @@ class SandboxError(RuntimeError):
     pass
 
 
+@dataclass(frozen=True)
+class SandboxProfile:
+    """Runtime limits for a generated capability execution."""
+
+    backend: str
+    image: str = "forgeagent-sandbox:local"
+    memory: str = "256m"
+    cpus: str = "0.50"
+    pids: int = 64
+
+
+def container_command(profile: SandboxProfile = SandboxProfile("container")) -> list[str]:
+    """Return the hardened command; kept pure so it can be audited and tested."""
+    if profile.backend != "container":
+        raise ValueError("container_command requires a container profile")
+    return [
+        "docker", "run", "--rm", "-i", "--network", "none", "--read-only",
+        "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--pids-limit",
+        str(profile.pids), "--memory", profile.memory, "--cpus", profile.cpus,
+        "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m", profile.image,
+    ]
+
+
 def policy_violations(source: str) -> list[str]:
     """Return static policy violations before a candidate reaches execution."""
     try:
@@ -60,23 +84,39 @@ def policy_violations(source: str) -> list[str]:
     return sorted(set(violations))
 
 
-def execute(source: str, payload: object, timeout: float = 2.0) -> object:
+def execute(source: str, payload: object, timeout: float = 2.0, profile: SandboxProfile | None = None) -> object:
+    """Run a proven candidate locally or in the hardened container profile.
+
+    `FORGEAGENT_SANDBOX=container` enables the production runner. Set
+    `FORGEAGENT_REQUIRE_CONTAINER=1` to reject any accidental local fallback.
+    """
     violations = policy_violations(source)
     if violations:
         raise SandboxError("; ".join(violations))
-    with tempfile.TemporaryDirectory(prefix="forgeagent-") as workdir:
+    selected = profile or SandboxProfile(os.environ.get("FORGEAGENT_SANDBOX", "local"))
+    if selected.backend not in {"local", "container"}:
+        raise SandboxError("Sandbox backend must be local or container")
+    if os.environ.get("FORGEAGENT_REQUIRE_CONTAINER") == "1" and selected.backend != "container":
+        raise SandboxError("Production policy requires the container sandbox")
+    request = json.dumps(source) + "\n" + json.dumps(payload) + "\n"
+    if selected.backend == "container":
+        if not shutil.which("docker"):
+            raise SandboxError("Docker is required for container isolation. Build the sandbox image first.")
+        command, workdir, env = container_command(selected), None, {"PATH": os.environ.get("PATH", ""), "PYTHONIOENCODING": "utf-8"}
         try:
-            result = subprocess.run(
-                [sys.executable, "-I", "-c", RUNNER],
-                input=json.dumps(source) + "\n" + json.dumps(payload) + "\n",
-                text=True,
-                capture_output=True,
-                timeout=timeout,
-                cwd=workdir,
-                env={"PATH": os.environ.get("PATH", ""), "PYTHONIOENCODING": "utf-8"},
-            )
+            result = subprocess.run(command, input=request, text=True, capture_output=True, timeout=timeout, cwd=workdir, env=env)
         except subprocess.TimeoutExpired as exc:
             raise SandboxError(f"Timed out after {timeout}s") from exc
+    else:
+        with tempfile.TemporaryDirectory(prefix="forgeagent-") as workdir:
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-I", "-c", RUNNER], input=request, text=True,
+                    capture_output=True, timeout=timeout, cwd=workdir,
+                    env={"PATH": os.environ.get("PATH", ""), "PYTHONIOENCODING": "utf-8"},
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise SandboxError(f"Timed out after {timeout}s") from exc
     if result.returncode != 0:
         message = (result.stderr or result.stdout).strip().splitlines()[-1:]
         raise SandboxError(message[0] if message else "Sandbox execution failed")
