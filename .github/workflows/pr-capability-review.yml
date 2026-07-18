@@ -1,0 +1,31 @@
+name: ForgeAgent PR Capability Review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forgeagent-capability-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  capability-review:
+    name: Capability policy and proof review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Load optional project-policy parser when configured
+        if: ${{ hashFiles('forgeagent-policy.yml') != '' }}
+        run: python3 -m pip install -r requirements-policy.txt
+      - name: Review changed capability contracts
+        run: python3 scripts/review_capabilities.py --base "${{ github.event.pull_request.base.sha }}"
