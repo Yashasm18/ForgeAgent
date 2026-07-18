@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from typing import Iterable
 
 from generator import ProofCase, ToolProposal
+from policy_config import load_policy
 from sandbox import SandboxError, execute, policy_violations
 
 
@@ -25,7 +26,8 @@ class ProofEngine:
     OPTIONAL_CATEGORIES = ("adversarial",)
 
     def evaluate(self, proposal: ToolProposal, cases: Iterable[ProofCase] | None = None, adversarial_cases: Iterable[ProofCase] | None = None) -> dict[str, object]:
-        findings = policy_violations(proposal.source)
+        configured = load_policy()
+        findings = policy_violations(proposal.source, configured)
         proof_cases = list(cases or self._default_cases(proposal))
         supplied_adversarial = list(adversarial_cases or ())
         if any(case.category != "adversarial" for case in supplied_adversarial):
@@ -39,7 +41,10 @@ class ProofEngine:
         for case in proof_cases:
             results.append(self._run_case(proposal.source, case))
         categories = {case.category for case in proof_cases}
-        missing = [category for category in self.REQUIRED_CATEGORIES if category not in categories]
+        # Project policy only adds coverage; it cannot remove the hardcoded
+        # normal/edge/contract minimum.
+        required_categories = set(self.REQUIRED_CATEGORIES) | set(configured.required_proof_categories)
+        missing = sorted(category for category in required_categories if category not in categories)
         if missing:
             results.append(ProofResult("coverage", False, "Required test categories", f"Missing: {', '.join(missing)}"))
         else:

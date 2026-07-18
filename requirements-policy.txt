@@ -1,0 +1,4 @@
+# Optional: required only to load forgeagent-policy.yml project restrictions.
+# Without it, missing, malformed, or unreadable policy files fall back to the
+# unchanged hardcoded baseline; the offline demo does not load this package.
+PyYAML>=6,<7

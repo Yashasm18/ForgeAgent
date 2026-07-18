@@ -16,13 +16,15 @@ import tempfile
 import ast
 from dataclasses import dataclass
 
+from policy_config import EffectivePolicy, load_policy
+
 ALLOWED_IMPORTS = {"collections", "csv", "datetime", "json", "math", "re", "statistics", "string"}
 FORBIDDEN_NAME_REFERENCES = {
     "__import__", "eval", "exec", "compile", "open", "globals", "locals", "vars",
     "getattr", "setattr", "delattr", "__builtins__", "__loader__", "__subclasses__",
 }
 
-RUNNER = r'''
+RUNNER_TEMPLATE = r'''
 import ast, builtins, json, sys
 ALLOWED = __ALLOWED__
 FORBIDDEN = __FORBIDDEN__
@@ -45,7 +47,11 @@ def safe_import(name, globals=None, locals=None, fromlist=(), level=0):
 namespace = {"__builtins__": {"__import__": safe_import, "abs": abs, "all": all, "any": any, "bool": bool, "dict": dict, "enumerate": enumerate, "float": float, "int": int, "isinstance": isinstance, "len": len, "list": list, "max": max, "min": min, "range": range, "round": round, "set": set, "sorted": sorted, "str": str, "sum": sum, "tuple": tuple, "zip": zip}}
 exec(compile(tree, "generated_tool.py", "exec"), namespace, namespace)
 print(json.dumps({"ok": True, "output": namespace["run"](payload)}, sort_keys=True, default=str))
-'''.replace("__ALLOWED__", repr(ALLOWED_IMPORTS)).replace("__FORBIDDEN__", repr(FORBIDDEN_NAME_REFERENCES))
+'''.replace("__FORBIDDEN__", repr(FORBIDDEN_NAME_REFERENCES))
+
+# Kept for code that inspects the default runner; execution renders the same
+# template with a policy-narrowed import set.
+RUNNER = RUNNER_TEMPLATE.replace("__ALLOWED__", repr(ALLOWED_IMPORTS))
 
 
 class SandboxError(RuntimeError):
@@ -75,8 +81,11 @@ def container_command(profile: SandboxProfile = SandboxProfile("container")) -> 
     ]
 
 
-def policy_violations(source: str) -> list[str]:
+def policy_violations(source: str, policy: EffectivePolicy | None = None) -> list[str]:
     """Return static policy violations before a candidate reaches execution."""
+    configured = policy or load_policy()
+    # The project file can only remove imports from the hardcoded baseline.
+    effective_allowed_imports = ALLOWED_IMPORTS & set(configured.allowed_imports)
     try:
         tree = ast.parse(source, mode="exec")
     except SyntaxError as exc:
@@ -86,7 +95,7 @@ def policy_violations(source: str) -> list[str]:
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             modules = [item.name.split(".")[0] for item in node.names] if isinstance(node, ast.Import) else [(node.module or "").split(".")[0]]
             for module in modules:
-                if module not in ALLOWED_IMPORTS:
+                if module not in effective_allowed_imports:
                     violations.append(f"disallowed import: {module}")
         if isinstance(node, ast.Name) and (node.id in FORBIDDEN_NAME_REFERENCES or (node.id.startswith("__") and node.id.endswith("__"))):
             violations.append(f"disallowed name reference: {node.id}")
@@ -103,7 +112,11 @@ def execute(source: str, payload: object, timeout: float = 2.0, profile: Sandbox
     `FORGEAGENT_SANDBOX=container` enables the production runner. Set
     `FORGEAGENT_REQUIRE_CONTAINER=1` to reject any accidental local fallback.
     """
-    violations = policy_violations(source)
+    configured = load_policy()
+    # Render the same narrowed import set in the runtime guard as static AST
+    # policy, preserving the independent safe_import defense-in-depth layer.
+    effective_allowed_imports = ALLOWED_IMPORTS & set(configured.allowed_imports)
+    violations = policy_violations(source, configured)
     if violations:
         raise SandboxError("; ".join(violations))
     selected = profile or SandboxProfile(os.environ.get("FORGEAGENT_SANDBOX", "local"))
@@ -124,7 +137,7 @@ def execute(source: str, payload: object, timeout: float = 2.0, profile: Sandbox
         with tempfile.TemporaryDirectory(prefix="forgeagent-") as workdir:
             try:
                 result = subprocess.run(
-                    [sys.executable, "-I", "-c", RUNNER], input=request, text=True,
+                    [sys.executable, "-I", "-c", RUNNER_TEMPLATE.replace("__ALLOWED__", repr(effective_allowed_imports))], input=request, text=True,
                     capture_output=True, timeout=timeout, cwd=workdir,
                     env={"PATH": os.environ.get("PATH", ""), "PYTHONIOENCODING": "utf-8"},
                 )

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Mapping
 
+from policy_config import load_policy
+
 
 SENSITIVE_TERMS = frozenset({"secret", "credential", "payment", "finance", "security", "network", "filesystem", "external", "production"})
 
@@ -34,6 +36,8 @@ def assess(policy: str, name: str, provenance: str, proof: Mapping[str, object],
         return GovernanceDecision(policy, "rejected", "Evidence proof did not pass.", False)
     if policy == "never" and sensitive:
         return GovernanceDecision(policy, "rejected", "Policy forbids sensitive or external capabilities.", False)
+    if load_policy().require_human_review:
+        return GovernanceDecision(policy, "pending", "Project policy requires a named human approver before promotion.", True)
     if policy in {"review", "production"} or sensitive:
         scope = "Production policy" if policy == "production" else "Risk policy"
         return GovernanceDecision(policy, "pending", f"{scope} requires a named human approver before promotion.", True)

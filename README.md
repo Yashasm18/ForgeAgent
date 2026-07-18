@@ -386,6 +386,33 @@ Imports always enter review state in the receiving project; they cannot
 silently become trusted. The offline demo, benchmark, evaluation, MCP server,
 and dashboard do not import or require this optional package.
 
+## Optional project policy
+
+Teams can commit a `forgeagent-policy.yml` to make a project more restrictive.
+Loading that file is optional and requires only this feature's dependency:
+
+```bash
+python3 -m pip install -r requirements-policy.txt
+```
+
+```yaml
+allowed_imports:
+  - json
+required_proof_categories:
+  - adversarial
+auto_promotion_rules:
+  require_human_review: true
+trusted_signer_keys:
+  - "ed25519-public-key-id"
+```
+
+The file can only narrow the hardcoded floor: effective imports are the
+intersection of the baseline and `allowed_imports`; required proof categories
+are the union of the baseline and `required_proof_categories`; and promotion
+or deployment rules can only add a named-human review hold. Trusted signer
+keys only narrow package imports. If the file is absent, malformed, or PyYAML
+is unavailable, ForgeAgent uses the unchanged hardcoded baseline.
+
 ## Control plane and coding-agent integration
 
 ForgeAgent now includes MCP v2 tools for requesting a capability, reusing a

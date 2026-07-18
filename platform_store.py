@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from governance import assess, validate_human_decision
+from policy_config import load_policy
 
 
 PACKAGE_SCHEMA_VERSION = 2
@@ -256,6 +257,9 @@ class PlatformStore:
             raise ValueError("revoked signer key")
         if package_id in set(revoked_package_ids):
             raise ValueError("revoked capability package")
+        trusted_signers = load_policy().trusted_signer_keys
+        if trusted_signers is not None and signer_key_id not in trusted_signers:
+            raise ValueError("signer key is not trusted by project policy")
         try:
             signature = base64.b64decode(str(package.get("signature", "")), validate=True)
             public_key.verify(signature, self._canonical(payload))
