@@ -429,6 +429,15 @@ a trusted gateway. See [developer integration and API instructions](docs/INTEGRA
 for Codex, Cursor, Claude Code, role rules, curl examples, and the remote
 deployment boundary.
 
+## Where this goes next
+
+Today, ForgeAgent provides a local, SQLite-backed control plane with real
+tenant roles and hashed tokens, runnable with `python3 main.py --api`. The
+natural next step is a deployed multi-tenant service with managed Postgres,
+real OAuth/OIDC authentication, project workspaces, and a browser-based
+approval queue. That hosted control plane is future work and is not implemented
+in this repository.
+
 ## Repository map
 
 - `foundry.py` — five-role council and governed capability lifecycle.
