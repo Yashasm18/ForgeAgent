@@ -31,6 +31,12 @@ CREATE TABLE IF NOT EXISTS approvals (
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY, project_id TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL, created_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS capability_requests (
+  capability_id TEXT PRIMARY KEY, task TEXT NOT NULL, created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS threat_models (
+  capability_id TEXT PRIMARY KEY, threat_json TEXT NOT NULL, created_at REAL NOT NULL
+);
 """
 
 @dataclass(frozen=True)
@@ -59,7 +65,7 @@ class PlatformStore:
     def close(self) -> None:
         self.db.close()
 
-    def promote(self, project_id: str, name: str, source: str, provenance: str, proof: dict[str, object], policy: str = "auto", threat_model: dict[str, object] | None = None) -> CapabilityRecord:
+    def promote(self, project_id: str, name: str, source: str, provenance: str, proof: dict[str, object], policy: str = "auto", threat_model: dict[str, object] | None = None, requested_task: str | None = None) -> CapabilityRecord:
         if not project_id.strip() or not name.strip():
             raise ValueError("project_id and capability name are required")
         now = time.time()
@@ -73,6 +79,10 @@ class PlatformStore:
         score = int(proof.get("trust_score", 0)) if state != "rejected" else 0
         self.db.execute("INSERT INTO capabilities VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (capability_id, project_id, name, version, source, provenance, score, state, now))
         self.db.execute("INSERT INTO proofs(capability_id,result_json,created_at) VALUES (?, ?, ?)", (capability_id, json.dumps(proof, sort_keys=True), now))
+        if requested_task is not None:
+            self.db.execute("INSERT INTO capability_requests(capability_id,task,created_at) VALUES (?, ?, ?)", (capability_id, requested_task, now))
+        if threat_model is not None:
+            self.db.execute("INSERT INTO threat_models(capability_id,threat_json,created_at) VALUES (?, ?, ?)", (capability_id, json.dumps(threat_model, sort_keys=True), now))
         self.db.execute("INSERT INTO approvals(capability_id,policy,decision,reviewer,reason,created_at) VALUES (?, ?, ?, ?, ?, ?)", (capability_id, policy, decision, "system", reason, now))
         self._event(project_id, "capability_proposed", f"{name}@v{version}:{state}")
         self.db.commit()
@@ -118,6 +128,26 @@ class PlatformStore:
         # The digest is tamper-evident evidence for export/review; raw incident
         # payloads are never stored in this control-plane receipt.
         return {**payload, "integrity_sha256": hashlib.sha256(self._canonical(payload)).hexdigest()}
+
+    def pending_evidence(self) -> list[dict[str, object]]:
+        """Return complete evidence for pending capabilities without changing state."""
+        rows = self.db.execute(
+            "SELECT id,project_id,name,version,source,provenance,trust_score,state "
+            "FROM capabilities WHERE state = 'pending' ORDER BY created_at DESC"
+        ).fetchall()
+        pending: list[dict[str, object]] = []
+        for row in rows:
+            record = CapabilityRecord(**dict(row))
+            proof = self.db.execute("SELECT result_json FROM proofs WHERE capability_id = ? ORDER BY id DESC LIMIT 1", (record.id,)).fetchone()
+            threat = self.db.execute("SELECT threat_json FROM threat_models WHERE capability_id = ?", (record.id,)).fetchone()
+            request = self.db.execute("SELECT task FROM capability_requests WHERE capability_id = ?", (record.id,)).fetchone()
+            pending.append({
+                **asdict(record),
+                "requested_task": str(request["task"]) if request else None,
+                "threat_model": json.loads(threat["threat_json"]) if threat else {},
+                "proof": json.loads(proof["result_json"]) if proof else {},
+            })
+        return pending
 
     def export_package(self, capability_id: str, signing_key: str) -> dict[str, object]:
         record = self.get(capability_id)

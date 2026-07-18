@@ -7,6 +7,7 @@ from pathlib import Path
 
 from audit import AuditLog
 from dashboard import PAGE, create_server
+from platform_store import PlatformStore
 from registry import Tool, ToolRegistry
 
 
@@ -71,6 +72,58 @@ class DashboardAuditEndpointTests(unittest.TestCase):
         self.assertEqual(payload["proof_summary"]["total_case_count"], sum(counts))
         self.assertIn("d.proof_summary", PAGE)
         self.assertNotIn("x.tests?.length||1", PAGE)
+
+    def test_pending_endpoint_returns_full_read_only_evidence_package(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            registry_path = root / "tool_registry.json"
+            store = PlatformStore(root / "foundry.sqlite3")
+            proof = {
+                "passed": True,
+                "trust_score": 91,
+                "policy_findings": [],
+                "results": [
+                    {"category": "normal", "passed": True, "rationale": "known input", "detail": "matched"},
+                    {"category": "edge", "passed": True, "rationale": "empty input", "detail": "matched"},
+                    {"category": "contract", "passed": True, "rationale": "JSON output", "detail": "matched"},
+                ],
+            }
+            threat = {"detected_risk_surfaces": ["finance"], "allowed_boundary": "JSON payload in, JSON-compatible output out"}
+            store.promote(
+                "review/demo", "invoice_id_extractor", "def run(payload): return {'ids': []}", "test fixture",
+                proof, policy="production", threat_model=threat,
+                requested_task="Extract invoice IDs from an incident.",
+            )
+            store.close()
+            payload = self._get_json(create_server(registry_path, port=0), "/api/pending")
+
+        self.assertEqual(len(payload["pending"]), 1)
+        pending = payload["pending"][0]
+        self.assertEqual(pending["name"], "invoice_id_extractor")
+        self.assertEqual(pending["requested_task"], "Extract invoice IDs from an incident.")
+        self.assertEqual(pending["source"], "def run(payload): return {'ids': []}")
+        self.assertEqual(pending["trust_score"], 91)
+        self.assertEqual(pending["threat_model"]["detected_risk_surfaces"], ["finance"])
+        self.assertEqual([item["category"] for item in pending["proof"]["results"]], ["normal", "edge", "contract"])
+        self.assertIn("pending-review", PAGE)
+
+    def test_pending_endpoint_is_empty_when_no_pending_capability_exists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            payload = self._get_json(create_server(Path(directory) / "tool_registry.json", port=0), "/api/pending")
+
+        self.assertEqual(payload, {"pending": []})
+
+    @staticmethod
+    def _get_json(server, route):
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{server.server_port}{route}", timeout=2) as response:
+                return json.load(response)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from benchmark import run_safety_benchmark
+from platform_store import PlatformStore
 from registry import ToolRegistry
 
 
@@ -57,6 +58,18 @@ def tools_payload(registry_path: str | Path) -> dict[str, object]:
         },
     }
 
+
+def pending_payload(registry_path: str | Path) -> dict[str, object]:
+    """Read pending SQLite evidence for dashboard review; this never mutates state."""
+    database = Path(registry_path).parent / "foundry.sqlite3"
+    if not database.exists():
+        return {"pending": []}
+    store = PlatformStore(database)
+    try:
+        return {"pending": store.pending_evidence()}
+    finally:
+        store.close()
+
 PAGE = r'''<!doctype html><html><head><meta charset="utf-8"><title>ForgeAgent — Trust Ledger</title>
 <meta name="viewport" content="width=device-width,initial-scale=1"><style>
 *{box-sizing:border-box}body{margin:0;background:#08111b;color:#e8f0f7;font:15px Inter,ui-sans-serif,system-ui,sans-serif}main{max-width:1120px;margin:auto;padding:38px 24px 70px}.eyebrow{color:#7ee4c3;font-weight:800;letter-spacing:.16em;font-size:11px}.hero{display:flex;justify-content:space-between;gap:20px;align-items:end;border-bottom:1px solid #243546;padding-bottom:28px}.hero h1{font-family:Georgia,serif;font-size:55px;margin:7px 0;letter-spacing:-.06em}.hero p{color:#9db1c3;max-width:560px;line-height:1.55}.seal{width:134px;height:134px;border:1px solid #7ee4c3;border-radius:50%;display:grid;place-items:center;text-align:center;color:#7ee4c3;font-weight:800;letter-spacing:.08em;font-size:12px;box-shadow:0 0 55px #1f856844}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:27px 0}.metric,.panel{background:#0d1926;border:1px solid #243546;border-radius:14px}.metric{padding:18px}.metric b{font-size:32px;display:block;color:#fff}.metric span{color:#8da3b6;font-size:12px}.panel{padding:21px}.panel h2{font-size:15px;margin:0 0 15px}.panel h2 span{color:#7ee4c3}.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.step{background:#122234;border-radius:9px;padding:13px 10px;min-height:92px;color:#9db1c3;font-size:12px}.step b{display:block;color:#fff;margin-bottom:8px}.step.ok{border:1px solid #338b70}.tools{display:grid;gap:10px}.tool{padding:15px;border:1px solid #263b4d;border-radius:10px;background:#0b1724;display:flex;justify-content:space-between;gap:16px}.tool code{color:#e8f0f7;font-weight:700}.tool p{color:#8da3b6;margin:6px 0 0}.badge{height:max-content;padding:5px 9px;border-radius:100px;background:#12372f;color:#7ee4c3;font-size:11px;font-weight:800}.graph{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.edge{border-left:2px solid #7ee4c3;background:#0b1724;padding:10px;color:#9db1c3;font-size:12px}.edge b{display:block;color:#fff}.empty{color:#8da3b6;padding:16px 0}@media(max-width:700px){.hero{align-items:start;flex-direction:column}.hero h1{font-size:42px}.grid,.graph{grid-template-columns:1fr}.flow{grid-template-columns:1fr 1fr}.seal{display:none}}</style></head>
@@ -82,18 +95,33 @@ LIVE_COUNCIL_CSS = """
 .live-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.live-state{color:#7ee4c3;font-size:11px;font-weight:800;letter-spacing:.08em}.live-state.offline{color:#f0b86c}.council{display:grid;grid-template-columns:repeat(5,1fr);gap:9px}.council-role{background:#0b1724;border:1px solid #263b4d;border-radius:10px;min-height:126px;padding:11px}.council-role h3{margin:0 0 9px;color:#fff;font-size:12px}.council-event{border-left:2px solid #7ee4c3;padding:7px 8px;margin:6px 0;background:#101f2d;font-size:11px;color:#aabccc}.council-event b{display:block;color:#e8f0f7}.council-event.blocked{border-color:#e06f6f}.council-event.pending{border-color:#f0b86c}.council-event.muted{border-color:#587083}@media(max-width:700px){.council{grid-template-columns:1fr}}
 """
 
+PENDING_CSS = """
+.pending-review{display:grid;gap:12px}.pending-card{border:1px solid #604b29;border-radius:10px;background:#16150f;padding:15px}.pending-card h3{margin:0;color:#f6d18b;font-size:15px}.pending-meta{color:#b7a881;font-size:12px;margin:7px 0 12px}.pending-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pending-block{border-left:2px solid #f0b86c;background:#101f2d;padding:10px;color:#aabccc;font-size:12px}.pending-block b{display:block;color:#f5f7fa;margin-bottom:6px}.pending-source{margin:10px 0 0;overflow:auto;max-height:260px;padding:12px;border-radius:8px;background:#071019;border:1px solid #263b4d;color:#d8e7f1;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre}.proof-entry{border-left:2px solid #7ee4c3;padding:6px 8px;margin:5px 0;background:#0b1724}.proof-entry.failed{border-color:#e06f6f}@media(max-width:700px){.pending-grid{grid-template-columns:1fr}}
+"""
+
 LIVE_COUNCIL_SECTION = """
 <section class="panel" style="margin-top:14px"><div class="live-head"><h2><span>05 /</span> Live Foundry Council</h2><div class="live-state" id="live-state">CONNECTING…</div></div><p class="empty">New council decisions are read directly from the append-only audit log while a Foundry run is in progress.</p><div class="council" id="council"><div class="empty">Waiting for Council evidence…</div></div></section>
+"""
+
+PENDING_SECTION = """
+<section class="panel" style="margin-top:14px"><div class="live-head"><h2><span>06 /</span> Pending review</h2><div class="live-state offline">VIEW ONLY</div></div><p class="empty">Candidates held by governance are shown with their complete evidence package. Approval and rejection remain outside this dashboard.</p><div class="pending-review" id="pending-review"><div class="empty">Loading pending evidence…</div></div></section>
 """
 
 LIVE_COUNCIL_SCRIPT = r'''<script>
 (()=>{const roles=['planner','builder','security','evaluator','governor'];let cursor=0;let feed=[];const escape=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));const state=status=>/rejected|blocked|failed|denied/.test(status)?'blocked':/pending|repair/.test(status)?'pending':/skipped/.test(status)?'muted':'';function render(){const grouped=Object.fromEntries(roles.map(role=>[role,[]]));feed.filter(event=>String(event.event||'').startsWith('council_')).forEach(event=>{const role=String(event.event).slice('council_'.length);if(grouped[role])grouped[role].push(event)});const seen=roles.some(role=>grouped[role].length);council.innerHTML=seen?roles.map(role=>`<section class="council-role"><h3>${role.toUpperCase()}</h3>${grouped[role].slice(-8).map(event=>`<div class="council-event ${state(String(event.outcome||''))}"><b>${escape(event.outcome||'pending').toUpperCase()}</b>${escape(event.detail)}<br><small>${escape(event.created_at)}</small></div>`).join('')||'<div class="empty">No decision yet.</div>'}</section>`).join(''):'<div class="empty">Waiting for a Foundry run. Open a second terminal and run a new --foundry-task.</div>'}async function poll(){try{const response=await fetch(`/api/audit-log?since=${cursor}`,{cache:'no-store'});if(!response.ok)throw new Error('audit endpoint unavailable');const data=await response.json();cursor=Number(data.cursor||cursor);if(Array.isArray(data.events)&&data.events.length){feed.push(...data.events);render()}liveState.textContent='LIVE / POLLING 1.2s';liveState.className='live-state'}catch(error){liveState.textContent='RETRYING…';liveState.className='live-state offline'}}const liveState=document.getElementById('live-state');poll();setInterval(poll,1200)})();
 </script>'''
 
+PENDING_SCRIPT = r'''<script>
+(()=>{const target=document.getElementById('pending-review');const escape=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));const proof=entry=>{const results=Array.isArray(entry.proof?.results)?entry.proof.results:[];return results.length?results.map(result=>`<div class="proof-entry ${result.passed?'':'failed'}"><b>${escape(result.category).toUpperCase()} / ${result.passed?'PASSED':'FAILED'}</b>${escape(result.detail||result.rationale||'')}</div>`).join(''):'<div class="empty">Proof evidence unavailable.</div>'};function render(items){target.innerHTML=items.length?items.map(entry=>{const surfaces=entry.threat_model?.detected_risk_surfaces||[];return `<article class="pending-card"><h3>${escape(entry.name)}@v${escape(entry.version)}</h3><div class="pending-meta">${escape(entry.project_id)} · trust score ${escape(entry.trust_score)} · ${escape(entry.provenance)}</div><div class="pending-grid"><div class="pending-block"><b>REQUESTED TASK</b>${escape(entry.requested_task||'Task evidence unavailable.')}</div><div class="pending-block"><b>THREAT MODEL</b>${surfaces.length?surfaces.map(escape).join(', '):'No detected risk surfaces.'}<br><small>${escape(entry.threat_model?.allowed_boundary||'Boundary evidence unavailable.')}</small></div><div class="pending-block"><b>PROOF RESULTS</b>${proof(entry)}</div><div class="pending-block"><b>GOVERNANCE STATE</b>PENDING — evidence retained; no action is available in this view.</div></div><pre class="pending-source"><code>${escape(entry.source)}</code></pre></article>`}).join(''):'<div class="empty">No capabilities are pending review. Run a Foundry task with <code>--approval-policy production</code> to create a reviewable evidence package.</div>'}async function load(){try{const response=await fetch('/api/pending',{cache:'no-store'});if(!response.ok)throw new Error('pending endpoint unavailable');const data=await response.json();render(Array.isArray(data.pending)?data.pending:[])}catch(error){target.innerHTML='<div class="empty">Pending evidence is temporarily unavailable.</div>'}}load();setInterval(load,1800)})();
+</script>'''
+
 # Keep the existing ledger intact and layer the live view into the local page.
 PAGE = PAGE.replace("</style></head>", LIVE_COUNCIL_CSS + "</style></head>")
+PAGE = PAGE.replace("</style></head>", PENDING_CSS + "</style></head>")
 PAGE = PAGE.replace("</section></main>\n<script>", LIVE_COUNCIL_SECTION + "</main>\n<script>")
 PAGE = PAGE.replace("</script></body></html>", "</script>" + LIVE_COUNCIL_SCRIPT + "</body></html>")
+PAGE = PAGE.replace(LIVE_COUNCIL_SECTION, LIVE_COUNCIL_SECTION + PENDING_SECTION)
+PAGE = PAGE.replace("</body></html>", PENDING_SCRIPT + "</body></html>")
 
 
 def create_server(
@@ -109,6 +137,8 @@ def create_server(
             request = urlparse(self.path)
             if request.path == "/api/tools":
                 body, content_type = json.dumps(tools_payload(path)).encode(), "application/json"
+            elif request.path == "/api/pending":
+                body, content_type = json.dumps(pending_payload(path)).encode(), "application/json"
             elif request.path == "/api/events":
                 audit_path = path.parent / "audit_log.jsonl"
                 try:

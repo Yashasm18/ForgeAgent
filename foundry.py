@@ -91,7 +91,10 @@ class CapabilityFoundry:
             self._record_decision(decisions, capability, "planner", "repair_requested", f"Candidate failed proof: {failure}")
             proposal = self.generator.propose(f"{task}\nRepair the prior candidate. Failure evidence: {failure}", payload)
         assert threat is not None and report is not None
-        record = self.store.promote(self.project_id, proposal.name, proposal.source, proposal.provenance, report, approval_policy, threat)
+        record = self.store.promote(
+            self.project_id, proposal.name, proposal.source, proposal.provenance,
+            report, approval_policy, threat, requested_task=task,
+        )
         if record.state != "trusted":
             self._record_decision(decisions, capability, "governor", record.state, "Capability was retained as evidence but not executed.")
             return self._outcome(task, capability, record.state, None, inspection, decisions, threat, report, record)
