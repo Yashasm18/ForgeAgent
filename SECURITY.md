@@ -22,7 +22,7 @@ contact method, reporters may use that method instead.
 ## What this project actually protects against
 
 - **Static policy before execution.**
-  [`policy_violations()`](sandbox.py#L78-L97) parses candidate source with the
+  [`policy_violations()`](forgeagent/sandbox.py#L84-L106) parses candidate source with the
   Python AST before it reaches execution. It rejects imports outside the
   allowlist; forbidden name references including `__import__` (the import
   primitive), `eval`, `exec`, `compile`, `open`, `globals`, `locals`, `vars`,
@@ -30,22 +30,22 @@ contact method, reporters may use that method instead.
   must also define `run(payload)`.
 - **Runtime import enforcement as an independent layer.** The generated-tool
   runner replaces the normal import function with
-  [`safe_import`](sandbox.py#L41-L44), which permits only the same explicit
+  [`safe_import`](forgeagent/sandbox.py#L43-L46), which permits only the same explicit
   module allowlist. If static checking were bypassed, a sandboxed import still
   cannot load a disallowed top-level module. This is defense in depth, not a
   claim that the static check alone is a security boundary.
-- **Constrained execution.** [`execute()`](sandbox.py#L100-L139) runs a
+- **Constrained execution.** [`execute()`](forgeagent/sandbox.py#L109-L150) runs a
   candidate in a fresh subprocess with a timeout, temporary working directory,
   minimal environment, and restricted builtins. The optional container profile
   adds a non-root user, read-only filesystem, no network egress, dropped Linux
   capabilities, no-new-privileges, and process/CPU/memory limits; see
   [`Dockerfile.sandbox`](Dockerfile.sandbox) and
   [`compose.production.yml`](compose.production.yml).
-- **Governed promotion.** [`governance.py`](governance.py) rejects policy or
+- **Governed promotion.** [`forgeagent/governance.py`](forgeagent/governance.py) rejects policy or
   proof failures and holds sensitive, review-policy, and production-policy
   capabilities for a named human approval. Approval requires a substantive
   reason; production policy never silently promotes a candidate.
-- **Auditable decisions.** [`audit.py`](audit.py) appends Foundry events to
+- **Auditable decisions.** [`forgeagent/audit.py`](forgeagent/audit.py) appends Foundry events to
   `data/audit_log.jsonl`. The SQLite platform store records capability state,
   approvals, rejections, and related events; its project receipts include an
   integrity SHA-256 digest without raw incident payloads. The local control

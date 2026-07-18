@@ -1,6 +1,6 @@
 """Flagship ForgeAgent workflows expressed as capability dependency plans."""
 
-from agent import PlanStep
+from forgeagent.agent import PlanStep
 
 
 INCIDENT_RECOVERY_PLAN = (

@@ -5,10 +5,10 @@ import unittest
 import urllib.request
 from pathlib import Path
 
-from audit import AuditLog
-from dashboard import PAGE, create_server
-from platform_store import PlatformStore
-from registry import Tool, ToolRegistry
+from forgeagent.audit import AuditLog
+from forgeagent.dashboard import PAGE, create_server
+from forgeagent.platform_store import PlatformStore
+from forgeagent.registry import Tool, ToolRegistry
 
 
 class DashboardAuditEndpointTests(unittest.TestCase):

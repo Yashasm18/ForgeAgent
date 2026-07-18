@@ -1,6 +1,6 @@
 import unittest
 
-from incident_analysis import analyze_incident
+from forgeagent.incident_analysis import analyze_incident
 
 
 class IncidentAnalysisTests(unittest.TestCase):

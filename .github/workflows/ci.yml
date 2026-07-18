@@ -34,7 +34,7 @@ jobs:
       - name: Run deterministic proof suite
         run: python3 -m unittest discover -s tests -v
       - name: Compile Python modules
-        run: python3 -m py_compile *.py
+        run: python3 -m py_compile main.py forgeagent/*.py
       - name: Validate hosted demo JavaScript
         run: |
           sed -n '/<script>/,/<\/script>/p' demo/index.html | sed '1d;$d' > /tmp/forgeagent-demo.js
@@ -44,8 +44,8 @@ jobs:
           test -f Dockerfile.sandbox
           test -f Dockerfile.control-plane
           test -f compose.production.yml
-          test -f container_runner.py
-          test -f governance.py
+          test -f forgeagent/container_runner.py
+          test -f forgeagent/governance.py
 
   sandbox-image:
     name: Production sandbox image build

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from platform_store import PlatformStore
+from forgeagent.platform_store import PlatformStore
 
 
 class PlatformStoreTests(unittest.TestCase):

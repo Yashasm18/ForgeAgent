@@ -22,9 +22,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from generator import ProofCase, ToolProposal
-from proof_engine import ProofEngine
-from sandbox import policy_violations
+from forgeagent.generator import ProofCase, ToolProposal
+from forgeagent.proof_engine import ProofEngine
+from forgeagent.sandbox import policy_violations
 
 
 def is_capability_source(source: str) -> bool:

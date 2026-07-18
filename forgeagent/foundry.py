@@ -6,13 +6,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from agent import BLUEPRINTS, ForgeAgent
-from audit import AuditLog
-from generator import ProofCase, ProposalGenerator, ToolProposal
-from platform_store import PlatformStore
-from proof_engine import ProofEngine
-from repository_graph import RepositoryGraph
-from registry import ToolRegistry
+from forgeagent.agent import BLUEPRINTS, ForgeAgent
+from forgeagent.audit import AuditLog
+from forgeagent.generator import ProofCase, ProposalGenerator, ToolProposal
+from forgeagent.platform_store import PlatformStore
+from forgeagent.proof_engine import ProofEngine
+from forgeagent.repository_graph import RepositoryGraph
+from forgeagent.registry import ToolRegistry
 
 
 @dataclass(frozen=True)

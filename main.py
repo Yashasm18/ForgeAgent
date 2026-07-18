@@ -6,20 +6,20 @@ import argparse
 import json
 from pathlib import Path
 
-from agent import ForgeAgent
-from benchmark import run_safety_benchmark
-from capability_graph import CapabilityGraph
-from api_server import serve as serve_api
-from comparison import compare
-from dashboard import serve
-from demo_tasks import DEMO_TASKS, SHOWCASE_TASKS
-from evaluation import run_evaluation_suite
-from foundry import CapabilityFoundry
-from generator import GPT56Generator, GeneratorError
-from mcp_server import main as mcp_main
-from repository_graph import RepositoryGraph
-from registry import ToolRegistry
-from workflows import INCIDENT_RECOVERY_PLAN
+from forgeagent.agent import ForgeAgent
+from forgeagent.benchmark import run_safety_benchmark
+from forgeagent.capability_graph import CapabilityGraph
+from forgeagent.api_server import serve as serve_api
+from forgeagent.comparison import compare
+from forgeagent.dashboard import serve
+from forgeagent.demo_tasks import DEMO_TASKS, SHOWCASE_TASKS
+from forgeagent.evaluation import run_evaluation_suite
+from forgeagent.foundry import CapabilityFoundry
+from forgeagent.generator import GPT56Generator, GeneratorError
+from forgeagent.mcp_server import main as mcp_main
+from forgeagent.repository_graph import RepositoryGraph
+from forgeagent.registry import ToolRegistry
+from forgeagent.workflows import INCIDENT_RECOVERY_PLAN
 
 
 def main() -> None:

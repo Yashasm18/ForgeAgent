@@ -1,7 +1,7 @@
 import unittest
 
-from generator import ToolProposal
-from proof_engine import ProofEngine
+from forgeagent.generator import ToolProposal
+from forgeagent.proof_engine import ProofEngine
 
 
 class ProofEngineTests(unittest.TestCase):

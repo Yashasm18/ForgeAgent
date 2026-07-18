@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from control_plane import AuthorizationError, ControlPlane
+from forgeagent.control_plane import AuthorizationError, ControlPlane
 
 
 class ControlPlaneTests(unittest.TestCase):

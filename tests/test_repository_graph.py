@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from repository_graph import RepositoryGraph
+from forgeagent.repository_graph import RepositoryGraph
 
 
 class RepositoryGraphTests(unittest.TestCase):

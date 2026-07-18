@@ -3,11 +3,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from governance import assess
-from foundry import CapabilityFoundry
-from platform_store import PlatformStore
-from registry import Tool, ToolRegistry
-from sandbox import SandboxError, SandboxProfile, container_command, execute
+from forgeagent.governance import assess
+from forgeagent.foundry import CapabilityFoundry
+from forgeagent.platform_store import PlatformStore
+from forgeagent.registry import Tool, ToolRegistry
+from forgeagent.sandbox import SandboxError, SandboxProfile, container_command, execute
 
 
 SOURCE = "def run(payload):\n    return {'ok': payload['value']}\n"

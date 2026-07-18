@@ -5,7 +5,8 @@ on:
     branches: [main]
     paths:
       - "demo/**"
-      - "*.py"
+      - "main.py"
+      - "forgeagent/**/*.py"
       - ".github/workflows/pages.yml"
       - ".github/workflows/ci.yml"
   workflow_dispatch:

@@ -5,11 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Iterable
 
-from audit import AuditLog
-from capability_graph import CapabilityGraph, Edge
-from generator import ProposalGenerator, ToolProposal
-from registry import Tool, ToolRegistry
-from sandbox import SandboxError, execute, policy_violations
+from forgeagent.audit import AuditLog
+from forgeagent.capability_graph import CapabilityGraph, Edge
+from forgeagent.generator import ProposalGenerator, ToolProposal
+from forgeagent.registry import Tool, ToolRegistry
+from forgeagent.sandbox import SandboxError, execute, policy_violations
 
 
 @dataclass(frozen=True)

@@ -8,9 +8,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from benchmark import run_safety_benchmark
-from platform_store import PlatformStore
-from registry import ToolRegistry
+from forgeagent.benchmark import run_safety_benchmark
+from forgeagent.platform_store import PlatformStore
+from forgeagent.registry import ToolRegistry
 
 
 def audit_updates(audit_path: str | Path, since: int = 0) -> dict[str, object]:

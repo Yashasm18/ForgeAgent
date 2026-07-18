@@ -3,7 +3,7 @@ import json
 import unittest
 from unittest.mock import patch
 
-from generator import (
+from forgeagent.generator import (
     ADVERSARIAL_CASES_SCHEMA,
     CAPABILITY_MATCH_SCHEMA,
     GPT56Generator,
@@ -35,7 +35,7 @@ class StructuredOutputGeneratorTests(unittest.TestCase):
             request_bodies.append(json.loads(request.data.decode("utf-8")))
             return io.BytesIO(json.dumps({"output_text": json.dumps(next(responses))}).encode("utf-8"))
 
-        with patch("generator.urllib.request.urlopen", side_effect=fake_urlopen):
+        with patch("forgeagent.generator.urllib.request.urlopen", side_effect=fake_urlopen):
             generator = GPT56Generator(api_key="test-key")
             proposal = generator.propose("Extract invoice IDs", {"text": "INV-1"})
             match = generator.match_existing_capability(

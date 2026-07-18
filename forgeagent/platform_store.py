@@ -11,8 +11,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
-from governance import assess, validate_human_decision
-from policy_config import load_policy
+from forgeagent.governance import assess, validate_human_decision
+from forgeagent.policy_config import load_policy
 
 
 PACKAGE_SCHEMA_VERSION = 2

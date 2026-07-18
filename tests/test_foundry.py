@@ -2,9 +2,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from foundry import CapabilityFoundry
-from generator import ProofCase, ToolProposal
-from demo_tasks import RECORDED_ADVERSARIAL_EXAMPLE
+from forgeagent.foundry import CapabilityFoundry
+from forgeagent.generator import ProofCase, ToolProposal
+from forgeagent.demo_tasks import RECORDED_ADVERSARIAL_EXAMPLE
 
 
 class SequenceGenerator:

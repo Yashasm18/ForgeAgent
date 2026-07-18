@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from sandbox import policy_violations
+from forgeagent.sandbox import policy_violations
 
 
 @dataclass(frozen=True)

@@ -25,7 +25,7 @@ DONE   Result produced by verified tool.
 
 ## The hook story
 
-A generated capability could alias `__import__` and attempt to bypass the sandbox policy gate. ForgeAgent closes that class twice: a static AST check rejects it before execution, and the runtime replaces imports with the `safe_import` allowlist in [`sandbox.py`](sandbox.py); both protections are exercised by [`tests/test_sandbox_security.py`](tests/test_sandbox_security.py).
+A generated capability could alias `__import__` and attempt to bypass the sandbox policy gate. ForgeAgent closes that class twice: a static AST check rejects it before execution, and the runtime replaces imports with the `safe_import` allowlist in [`forgeagent/sandbox.py`](forgeagent/sandbox.py); both protections are exercised by [`tests/test_sandbox_security.py`](tests/test_sandbox_security.py).
 
 AI agents are increasingly allowed to write and run their own code; without a system like this, that trust is assumed, not earned.
 
@@ -78,13 +78,13 @@ The first command forges curated offline capabilities after proof; the second de
 
 | Capability | What is real now | Where to verify it |
 | --- | --- | --- |
-| Governed capability lifecycle | Propose, policy-check, isolate, prove, persist, version, and reuse constrained `run(payload)` capabilities. | [`foundry.py`](foundry.py), [`proof_engine.py`](proof_engine.py), `python3 main.py --foundry-task "Normalize inconsistent date formats in this import log" --payload '{"text":"batch=A 03/07/2026"}'` |
+| Governed capability lifecycle | Propose, policy-check, isolate, prove, persist, version, and reuse constrained `run(payload)` capabilities. | [`forgeagent/foundry.py`](forgeagent/foundry.py), [`forgeagent/proof_engine.py`](forgeagent/proof_engine.py), `python3 main.py --foundry-task "Normalize inconsistent date formats in this import log" --payload '{"text":"batch=A 03/07/2026"}'` |
 | Cross-agent reuse | A capability approved by one real MCP subprocess is reused by a separate OS process from the SQLite platform store. | [`tests/test_mcp_server.py`](tests/test_mcp_server.py) |
-| Adversarial proof | An opt-in live GPT-5.6 adversarial pass creates contract-breaking cases; a failure blocks promotion and enters repair evidence. A labelled offline recorded example is also included. | [`generator.py`](generator.py), [`proof_engine.py`](proof_engine.py), [`demo_tasks.py`](demo_tasks.py) |
-| Semantic matching | When a live generator is configured, existing capabilities are matched by task intent; unavailable or failed live matching falls back to the existing offline keywords. | [`agent.py`](agent.py), [`generator.py`](generator.py) |
-| Structured outputs | The three live GPT-5.6 calls enforce JSON Schemas through the Responses API before parsing. | [`generator.py`](generator.py) |
-| Live Foundry Council | The dashboard polls newly appended council decisions from the SQLite + JSONL audit trail while a Foundry run is active. | [`dashboard.py`](dashboard.py), [`audit.py`](audit.py), `python3 main.py --serve` |
-| Accurate proof evidence | Capability records persist the actual passing proof-case count; the dashboard shows evidence unavailable rather than inventing a fallback value. | [`registry.py`](registry.py), [`dashboard.py`](dashboard.py) |
+| Adversarial proof | An opt-in live GPT-5.6 adversarial pass creates contract-breaking cases; a failure blocks promotion and enters repair evidence. A labelled offline recorded example is also included. | [`forgeagent/generator.py`](forgeagent/generator.py), [`forgeagent/proof_engine.py`](forgeagent/proof_engine.py), [`forgeagent/demo_tasks.py`](forgeagent/demo_tasks.py) |
+| Semantic matching | When a live generator is configured, existing capabilities are matched by task intent; unavailable or failed live matching falls back to the existing offline keywords. | [`forgeagent/agent.py`](forgeagent/agent.py), [`forgeagent/generator.py`](forgeagent/generator.py) |
+| Structured outputs | The three live GPT-5.6 calls enforce JSON Schemas through the Responses API before parsing. | [`forgeagent/generator.py`](forgeagent/generator.py) |
+| Live Foundry Council | The dashboard polls newly appended council decisions from the SQLite + JSONL audit trail while a Foundry run is active. | [`forgeagent/dashboard.py`](forgeagent/dashboard.py), [`forgeagent/audit.py`](forgeagent/audit.py), `python3 main.py --serve` |
+| Accurate proof evidence | Capability records persist the actual passing proof-case count; the dashboard shows evidence unavailable rather than inventing a fallback value. | [`forgeagent/registry.py`](forgeagent/registry.py), [`forgeagent/dashboard.py`](forgeagent/dashboard.py) |
 | Reproducible evaluation | The benchmark chart is regenerated from the local benchmark, evaluation, and comparison commands. | [`scripts/generate_benchmark_chart.py`](scripts/generate_benchmark_chart.py) |
 | Production reference profile | An optional rootless, no-egress container profile and stricter approval policy are available for validation. | [`Dockerfile.sandbox`](Dockerfile.sandbox), [`compose.production.yml`](compose.production.yml) |
 
@@ -128,13 +128,13 @@ No. Memoization stores an answer for an identical input; ForgeAgent stores a
 LLM-code cache would save source because it was generated. ForgeAgent instead:
 
 - runs normal, edge, and contract proof categories in
-  [`proof_engine.py`](proof_engine.py) before trust;
+  [`forgeagent/proof_engine.py`](forgeagent/proof_engine.py) before trust;
 - applies sensitivity and production approval policy in
-  [`governance.py`](governance.py), rather than treating a passing string
+  [`forgeagent/governance.py`](forgeagent/governance.py), rather than treating a passing string
   transform and an external action alike;
 - preserves version lineage and rollback rather than overwriting history; and
 - routes a candidate replacement through the same policy-and-test path in
-  [`agent.py`](agent.py) and [`foundry.py`](foundry.py) before
+  [`forgeagent/agent.py`](forgeagent/agent.py) and [`forgeagent/foundry.py`](forgeagent/foundry.py) before
   `ToolRegistry.replace` can supersede a trusted version.
 
 The result is capability governance, not cached model output: source,
@@ -196,7 +196,7 @@ and contract proof. Any mismatch or exception blocks promotion and becomes
 repair evidence. If live adversarial generation is requested without a usable
 live generator, the run fails closed; it never silently skips the category.
 
-For a key-free explanation, [`demo_tasks.py`](demo_tasks.py) includes a clearly
+For a key-free explanation, [`forgeagent/demo_tasks.py`](forgeagent/demo_tasks.py) includes a clearly
 labelled recorded offline example where a slug normalizer passes its regular
 cases but fails an adversarial repeated-whitespace case. The regular `--demo`,
 `--benchmark`, `--evaluate`, and `--compare` flows make no API calls and remain
@@ -269,7 +269,7 @@ not claim that a browser itself can enforce OS-level container isolation.
 
 The interactive redactor removes emails, phone numbers, card-like values, and
 explicitly labelled secrets such as secret codes, passwords, OTPs, API keys,
-access tokens, and secret messages. `incident_analysis.py` provides the same
+access tokens, and secret messages. `forgeagent/incident_analysis.py` provides the same
 structured, audit-safe analysis path for arbitrary incident text in Python.
 
 Use the hosted demo here:
@@ -363,7 +363,7 @@ the practical “24/7 watch” for a hackathon repository.
 
 ## MCP and capability packages
 
-`mcp_server.py` exposes a stdio MCP interface for repository inspection,
+`forgeagent/mcp_server.py` exposes a stdio MCP interface for repository inspection,
 capability memory, audit receipts, and human approval decisions. Copy
 [`mcp.config.example.json`](mcp.config.example.json), substitute the absolute
 repository path, and register it in a compatible client such as Codex, Cursor,
@@ -440,16 +440,16 @@ in this repository.
 
 ## Repository map
 
-- `foundry.py` — five-role council and governed capability lifecycle.
-- `repository_graph.py` — local code/docs intelligence graph and impact hints.
-- `proof_engine.py` — deterministic/adversarial evidence and trust scoring.
-- `platform_store.py` and `governance.py` — SQLite memory, approval decisions,
+- `forgeagent/foundry.py` — five-role council and governed capability lifecycle.
+- `forgeagent/repository_graph.py` — local code/docs intelligence graph and impact hints.
+- `forgeagent/proof_engine.py` — deterministic/adversarial evidence and trust scoring.
+- `forgeagent/platform_store.py` and `forgeagent/governance.py` — SQLite memory, approval decisions,
   receipts, packages, and production policy.
-- `sandbox.py`, `container_runner.py`, `Dockerfile.sandbox` — local and
+- `forgeagent/sandbox.py`, `forgeagent/container_runner.py`, `Dockerfile.sandbox` — local and
   hardened container execution profiles.
 - `compose.production.yml` — production runtime reference configuration.
-- `mcp_server.py` — MCP developer-tool surface.
-- `control_plane.py` and `api_server.py` — tenant roles, hashed tokens,
+- `forgeagent/mcp_server.py` — MCP developer-tool surface.
+- `forgeagent/control_plane.py` and `forgeagent/api_server.py` — tenant roles, hashed tokens,
   authenticated API contracts, and audit-safe metrics.
 - `Dockerfile.control-plane` — rootless control-plane container profile.
 - `demo/index.html` — hosted, no-key judge experience.

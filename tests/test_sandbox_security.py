@@ -1,6 +1,6 @@
 import unittest
 
-from sandbox import SandboxError, execute, policy_violations
+from forgeagent.sandbox import SandboxError, execute, policy_violations
 
 
 class SandboxSecurityTests(unittest.TestCase):

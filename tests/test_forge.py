@@ -2,11 +2,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent import ForgeAgent
-from agent import BLUEPRINTS
-from generator import ToolProposal
-from registry import ToolRegistry
-from sandbox import execute
+from forgeagent.agent import ForgeAgent
+from forgeagent.agent import BLUEPRINTS
+from forgeagent.generator import ToolProposal
+from forgeagent.registry import ToolRegistry
+from forgeagent.sandbox import execute
 
 
 class StaticGenerator:

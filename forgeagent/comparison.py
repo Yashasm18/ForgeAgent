@@ -6,8 +6,8 @@ import tempfile
 import time
 from pathlib import Path
 
-from agent import ForgeAgent, PlanStep
-from registry import ToolRegistry
+from forgeagent.agent import ForgeAgent, PlanStep
+from forgeagent.registry import ToolRegistry
 
 
 RECURRING_ENGINEERING_STEPS = (

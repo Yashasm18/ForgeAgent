@@ -1,6 +1,6 @@
 import unittest
 
-from evaluation import EVAL_CASES, run_evaluation_suite
+from forgeagent.evaluation import EVAL_CASES, run_evaluation_suite
 
 
 class EvaluationTests(unittest.TestCase):

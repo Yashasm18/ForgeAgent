@@ -6,13 +6,19 @@ import json
 import re
 import sys
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 
-from agent import BLUEPRINTS
-from control_plane import ControlPlane
-from platform_store import PlatformStore
-from repository_graph import RepositoryGraph
-from sandbox import execute
+# Support both the documented module form (``python3 -m forgeagent.mcp_server``)
+# and direct stdio execution of this file for MCP clients that only accept paths.
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from forgeagent.agent import BLUEPRINTS
+from forgeagent.control_plane import ControlPlane
+from forgeagent.platform_store import PlatformStore
+from forgeagent.repository_graph import RepositoryGraph
+from forgeagent.sandbox import execute
 
 
 # These tools operate in a team/project namespace. Their capability memory is

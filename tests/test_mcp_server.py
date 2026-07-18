@@ -8,16 +8,16 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from control_plane import ControlPlane
-import mcp_server
-from mcp_server import PROJECT_SCOPED_TOOLS, call, handle
-from platform_store import PlatformStore
+from forgeagent.control_plane import ControlPlane
+import forgeagent.mcp_server as mcp_server
+from forgeagent.mcp_server import PROJECT_SCOPED_TOOLS, call, handle
+from forgeagent.platform_store import PlatformStore
 
 
 class McpTests(unittest.TestCase):
     @staticmethod
     def _spawn_stdio_server(root: Path) -> subprocess.Popen[str]:
-        server = Path(__file__).resolve().parents[1] / "mcp_server.py"
+        server = Path(__file__).resolve().parents[1] / "forgeagent" / "mcp_server.py"
         return subprocess.Popen(
             [sys.executable, str(server)], cwd=root, text=True, bufsize=1,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,

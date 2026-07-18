@@ -25,14 +25,14 @@ design: use the approval workflow to make it trusted.
 ## Local stdio setup
 
 Use the included [`mcp.config.example.json`](../mcp.config.example.json) as the
-shared configuration shape. Replace the absolute path.
+shared configuration shape. Replace the absolute path with the clone location.
 
 ```json
 {
   "mcpServers": {
     "forgeagent-foundry": {
       "command": "python3",
-      "args": ["/absolute/path/to/ForgeAgent/mcp_server.py"]
+      "args": ["/absolute/path/to/ForgeAgent/forgeagent/mcp_server.py"]
     }
   }
 }
@@ -60,7 +60,7 @@ Use the Claude Code MCP command with the same stdio executable, for example:
 
 ```bash
 claude mcp add-json forgeagent-foundry \
-  '{"type":"stdio","command":"python3","args":["/absolute/path/to/ForgeAgent/mcp_server.py"]}' \
+  '{"type":"stdio","command":"python3","args":["/absolute/path/to/ForgeAgent/forgeagent/mcp_server.py"]}' \
   --scope project
 ```
 

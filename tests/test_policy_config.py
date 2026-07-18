@@ -6,11 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from generator import ToolProposal
-from governance import assess
-from policy_config import load_policy
-from proof_engine import ProofEngine
-from sandbox import SandboxError, execute, policy_violations
+from forgeagent.generator import ToolProposal
+from forgeagent.governance import assess
+from forgeagent.policy_config import load_policy
+from forgeagent.proof_engine import ProofEngine
+from forgeagent.sandbox import SandboxError, execute, policy_violations
 
 
 @contextlib.contextmanager

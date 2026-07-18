@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from time import perf_counter
 
-from incident_analysis import analyze_incident
-from sandbox import policy_violations
+from forgeagent.incident_analysis import analyze_incident
+from forgeagent.sandbox import policy_violations
 
 
 @dataclass(frozen=True)

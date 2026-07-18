@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Mapping
 
-from policy_config import load_policy
+from forgeagent.policy_config import load_policy
 
 
 SENSITIVE_TERMS = frozenset({"secret", "credential", "payment", "finance", "security", "network", "filesystem", "external", "production"})

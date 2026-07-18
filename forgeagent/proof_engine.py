@@ -6,9 +6,9 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Iterable
 
-from generator import ProofCase, ToolProposal
-from policy_config import load_policy
-from sandbox import SandboxError, execute, policy_violations
+from forgeagent.generator import ProofCase, ToolProposal
+from forgeagent.policy_config import load_policy
+from forgeagent.sandbox import SandboxError, execute, policy_violations
 
 
 @dataclass(frozen=True)

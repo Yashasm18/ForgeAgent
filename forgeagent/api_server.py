@@ -12,7 +12,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-from control_plane import AuthorizationError, ControlPlane
+from forgeagent.control_plane import AuthorizationError, ControlPlane
 
 
 class ControlPlaneHandler(BaseHTTPRequestHandler):

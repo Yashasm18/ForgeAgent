@@ -16,8 +16,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from foundry import CapabilityFoundry
-from platform_store import PlatformStore
+from forgeagent.foundry import CapabilityFoundry
+from forgeagent.platform_store import PlatformStore
 
 
 SCHEMA = """

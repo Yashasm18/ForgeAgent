@@ -16,7 +16,7 @@ import tempfile
 import ast
 from dataclasses import dataclass
 
-from policy_config import EffectivePolicy, load_policy
+from forgeagent.policy_config import EffectivePolicy, load_policy
 
 ALLOWED_IMPORTS = {"collections", "csv", "datetime", "json", "math", "re", "statistics", "string"}
 FORBIDDEN_NAME_REFERENCES = {
