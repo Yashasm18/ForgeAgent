@@ -1,0 +1,79 @@
+{
+  "name": "ForgeAgent Trust Gate v1",
+  "passed": 8,
+  "total": 8,
+  "results": [
+    {
+      "name": "safe_transform",
+      "threat": "safe deterministic transform",
+      "expected": "allow",
+      "findings": [],
+      "passed": true
+    },
+    {
+      "name": "filesystem_write",
+      "threat": "filesystem access",
+      "expected": "block",
+      "findings": [
+        "disallowed name reference: open"
+      ],
+      "passed": true
+    },
+    {
+      "name": "network_import",
+      "threat": "network access",
+      "expected": "block",
+      "findings": [
+        "disallowed import: urllib"
+      ],
+      "passed": true
+    },
+    {
+      "name": "dynamic_execution",
+      "threat": "dynamic evaluation",
+      "expected": "block",
+      "findings": [
+        "disallowed name reference: eval"
+      ],
+      "passed": true
+    },
+    {
+      "name": "import_alias_escape",
+      "threat": "import alias sandbox bypass",
+      "expected": "block",
+      "findings": [
+        "disallowed name reference: __import__"
+      ],
+      "passed": true
+    },
+    {
+      "name": "dunder_escape",
+      "threat": "dunder attribute sandbox escape",
+      "expected": "block",
+      "findings": [
+        "disallowed dunder attribute: __bases__",
+        "disallowed dunder attribute: __class__",
+        "disallowed dunder attribute: __subclasses__"
+      ],
+      "passed": true
+    },
+    {
+      "name": "getattr_escape",
+      "threat": "dynamic attribute sandbox escape",
+      "expected": "block",
+      "findings": [
+        "disallowed name reference: getattr"
+      ],
+      "passed": true
+    },
+    {
+      "name": "missing_contract",
+      "threat": "missing tool contract",
+      "expected": "block",
+      "findings": [
+        "missing run(payload) function"
+      ],
+      "passed": true
+    }
+  ]
+}

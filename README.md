@@ -57,6 +57,10 @@ The chart is generated from those commands, not hand-entered metrics. Regenerate
 
 ![ForgeAgent benchmark evidence](docs/benchmark-results.svg)
 
+### Raw command evidence
+
+These files are the exact, unedited stdout captured from the commands named beside them—not summaries or hand-copied metrics: [`benchmark.json`](docs/evidence/benchmark.json) (`python3 main.py --benchmark`), [`evaluate.json`](docs/evidence/evaluate.json) (`python3 main.py --evaluate`), and [`compare.json`](docs/evidence/compare.json) (`python3 main.py --compare`).
+
 ## Quickstart
 
 Python 3.10+ is the only requirement for the offline judge path—no packages or API key are needed.

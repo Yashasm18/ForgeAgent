@@ -1,0 +1,528 @@
+{
+  "suite": "ForgeAgent Evaluation Arena v1",
+  "total": 50,
+  "passed": 50,
+  "unsafe_rejected": 10,
+  "elapsed_ms": 2.39,
+  "cost_usd": null,
+  "cost_note": "This key-free suite makes no model API calls.",
+  "results": [
+    {
+      "name": "safe_01",
+      "kind": "candidate",
+      "expected": "allow",
+      "outcome": "allow",
+      "passed": true,
+      "findings": []
+    },
+    {
+      "name": "safe_02",
+      "kind": "candidate",
+      "expected": "allow",
+      "outcome": "allow",
+      "passed": true,
+      "findings": []
+    },
+    {
+      "name": "safe_03",
+      "kind": "candidate",
+      "expected": "allow",
+      "outcome": "allow",
+      "passed": true,
+      "findings": []
+    },
+    {
+      "name": "safe_04",
+      "kind": "candidate",
+      "expected": "allow",
+      "outcome": "allow",
+      "passed": true,
+      "findings": []
+    },
+    {
+      "name": "safe_05",
+      "kind": "candidate",
+      "expected": "allow",
+      "outcome": "allow",
+      "passed": true,
+      "findings": []
+    },
+    {
+      "name": "safe_06",
+      "kind": "candidate",
+      "expected": "allow",
+      "outcome": "allow",
+      "passed": true,
+      "findings": []
+    },
+    {
+      "name": "safe_07",
+      "kind": "candidate",
+      "expected": "allow",
+      "outcome": "allow",
+      "passed": true,
+      "findings": []
+    },
+    {
+      "name": "safe_08",
+      "kind": "candidate",
+      "expected": "allow",
+      "outcome": "allow",
+      "passed": true,
+      "findings": []
+    },
+    {
+      "name": "safe_09",
+      "kind": "candidate",
+      "expected": "allow",
+      "outcome": "allow",
+      "passed": true,
+      "findings": []
+    },
+    {
+      "name": "safe_10",
+      "kind": "candidate",
+      "expected": "allow",
+      "outcome": "allow",
+      "passed": true,
+      "findings": []
+    },
+    {
+      "name": "unsafe_01",
+      "kind": "candidate",
+      "expected": "block",
+      "outcome": "block",
+      "passed": true,
+      "findings": [
+        "disallowed name reference: open"
+      ]
+    },
+    {
+      "name": "unsafe_02",
+      "kind": "candidate",
+      "expected": "block",
+      "outcome": "block",
+      "passed": true,
+      "findings": [
+        "disallowed import: urllib"
+      ]
+    },
+    {
+      "name": "unsafe_03",
+      "kind": "candidate",
+      "expected": "block",
+      "outcome": "block",
+      "passed": true,
+      "findings": [
+        "disallowed name reference: eval"
+      ]
+    },
+    {
+      "name": "unsafe_04",
+      "kind": "candidate",
+      "expected": "block",
+      "outcome": "block",
+      "passed": true,
+      "findings": [
+        "disallowed name reference: exec"
+      ]
+    },
+    {
+      "name": "unsafe_05",
+      "kind": "candidate",
+      "expected": "block",
+      "outcome": "block",
+      "passed": true,
+      "findings": [
+        "disallowed name reference: __import__"
+      ]
+    },
+    {
+      "name": "unsafe_06",
+      "kind": "candidate",
+      "expected": "block",
+      "outcome": "block",
+      "passed": true,
+      "findings": [
+        "disallowed import: subprocess"
+      ]
+    },
+    {
+      "name": "unsafe_07",
+      "kind": "candidate",
+      "expected": "block",
+      "outcome": "block",
+      "passed": true,
+      "findings": [
+        "disallowed import: socket"
+      ]
+    },
+    {
+      "name": "unsafe_08",
+      "kind": "candidate",
+      "expected": "block",
+      "outcome": "block",
+      "passed": true,
+      "findings": [
+        "missing run(payload) function"
+      ]
+    },
+    {
+      "name": "unsafe_09",
+      "kind": "candidate",
+      "expected": "block",
+      "outcome": "block",
+      "passed": true,
+      "findings": [
+        "disallowed name reference: compile"
+      ]
+    },
+    {
+      "name": "unsafe_10",
+      "kind": "candidate",
+      "expected": "block",
+      "outcome": "block",
+      "passed": true,
+      "findings": [
+        "disallowed import: os"
+      ]
+    },
+    {
+      "name": "incident_01",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_02",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_03",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "high"
+    },
+    {
+      "name": "incident_04",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email",
+        "labelled_secret"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_05",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_06",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "high"
+    },
+    {
+      "name": "incident_07",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_08",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email",
+        "labelled_secret"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_09",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "high"
+    },
+    {
+      "name": "incident_10",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_11",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_12",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email",
+        "labelled_secret"
+      ],
+      "risk": "high"
+    },
+    {
+      "name": "incident_13",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_14",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_15",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "high"
+    },
+    {
+      "name": "incident_16",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email",
+        "labelled_secret"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_17",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_18",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "high"
+    },
+    {
+      "name": "incident_19",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_20",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email",
+        "labelled_secret"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_21",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "high"
+    },
+    {
+      "name": "incident_22",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_23",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_24",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email",
+        "labelled_secret"
+      ],
+      "risk": "high"
+    },
+    {
+      "name": "incident_25",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_26",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_27",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "high"
+    },
+    {
+      "name": "incident_28",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email",
+        "labelled_secret"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_29",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "medium"
+    },
+    {
+      "name": "incident_30",
+      "kind": "incident",
+      "expected": "analyze",
+      "outcome": "analyze",
+      "passed": true,
+      "redactions": [
+        "email"
+      ],
+      "risk": "high"
+    }
+  ]
+}

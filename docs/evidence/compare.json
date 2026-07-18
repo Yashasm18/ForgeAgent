@@ -1,0 +1,14 @@
+{
+  "scenario": "Two identical 18-step recurring engineering incident workflows",
+  "stateless_agent": {
+    "new_skills": 36,
+    "reuses": 0,
+    "elapsed_ms": 2498.3
+  },
+  "forgeagent": {
+    "new_skills": 4,
+    "reuses": 32,
+    "elapsed_ms": 1265.5
+  },
+  "claim": "ForgeAgent learns once, verifies once, and reuses trusted capabilities on subsequent tasks."
+}
