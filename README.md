@@ -48,6 +48,7 @@ All figures below were generated locally without an API key on July 17, 2026.
 | Evidence | Measured result | Source command |
 | --- | --- | --- |
 | Regression suite | 59/59 tests passed | `python3 -m unittest discover -s tests -v` |
+| Sandbox security regressions | 4/4 passed; import-alias, dunder-attribute, and dynamic-`getattr` escapes remain blocked | `python3 -m unittest tests.test_sandbox_security -v` |
 | Trust-gate benchmark | 8/8 cases passed; 7/7 attack patterns blocked | `python3 main.py --benchmark` |
 | Evaluation arena | 50/50 cases passed; 10/10 unsafe proposals rejected | `python3 main.py --evaluate` |
 | Stateless comparison | 36 new skills; 0 reuses | `python3 main.py --compare` |
