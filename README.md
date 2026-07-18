@@ -43,11 +43,11 @@ This is the runnable local system: agents reach an MCP server, governed capabili
 
 ## Proof at a glance
 
-All figures below were generated locally without an API key on July 17, 2026.
+All figures below were generated locally without an API key on July 18, 2026.
 
 | Evidence | Measured result | Source command |
 | --- | --- | --- |
-| Regression suite | 59/59 tests passed | `python3 -m unittest discover -s tests -v` |
+| Regression suite | 65 tests passed | `python3 -m unittest discover -s tests -v` |
 | Sandbox security regressions | 4/4 passed; import-alias, dunder-attribute, and dynamic-`getattr` escapes remain blocked | `python3 -m unittest tests.test_sandbox_security -v` |
 | Trust-gate benchmark | 8/8 cases passed; 7/7 attack patterns blocked | `python3 main.py --benchmark` |
 | Evaluation arena | 50/50 cases passed; 10/10 unsafe proposals rejected | `python3 main.py --evaluate` |
@@ -369,6 +369,22 @@ capability memory, audit receipts, and human approval decisions. Copy
 [`mcp.config.example.json`](mcp.config.example.json), substitute the absolute
 repository path, and register it in a compatible client such as Codex, Cursor,
 or Claude Code.
+
+### One-command client setup
+
+For the fast path, inspect the side-effect-free plan first, then explicitly
+apply it only if the displayed client locations look right:
+
+```bash
+python3 scripts/setup_mcp.py
+python3 scripts/setup_mcp.py --apply
+```
+
+The helper detects installed Codex, Cursor, and Claude Code clients; it uses
+absolute paths, backs up an existing configuration before changing it, merges
+only the `forgeagent-foundry` entry, and skips an existing entry. The default
+command is a dry run and writes nothing. Manual configuration remains fully
+documented in [the integration guide](docs/INTEGRATIONS.md).
 
 Capability package signing is optional and is the only feature that needs the
 maintained `cryptography` package:

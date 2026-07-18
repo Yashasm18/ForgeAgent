@@ -27,6 +27,25 @@ design: use the approval workflow to make it trusted.
 Use the included [`mcp.config.example.json`](../mcp.config.example.json) as the
 shared configuration shape. Replace the absolute path with the clone location.
 
+### Fast path: safe setup helper
+
+From the repository root, first run the default dry-run plan. It detects
+Codex, Cursor, and Claude Code without changing any config. Only the explicit
+second command writes a config; it backs up existing files and never replaces
+unrelated MCP entries.
+
+```bash
+python3 scripts/setup_mcp.py
+python3 scripts/setup_mcp.py --apply
+```
+
+The helper adds `forgeagent-foundry` with the absolute path to this clone's
+`forgeagent/mcp_server.py`. It uses Codex's `$CODEX_HOME/config.toml` (normally
+`~/.codex/config.toml`), Cursor's `~/.cursor/mcp.json`, and Claude Code's
+documented project-scope `.mcp.json` through `claude mcp add-json --scope project`.
+The manual instructions below remain useful when you want to select a different
+scope or inspect the exact configuration yourself.
+
 ```json
 {
   "mcpServers": {
