@@ -11,7 +11,7 @@ class SequenceGenerator:
     def __init__(self, proposals):
         self.proposals = iter(proposals)
 
-    def propose(self, task, payload):
+    def propose(self, task, payload, repository_context=None):
         return next(self.proposals)
 
 
@@ -20,7 +20,7 @@ class AdversarialGenerator:
         self.proposal = proposal
         self.cases = cases
 
-    def propose(self, task, payload):
+    def propose(self, task, payload, repository_context=None):
         return self.proposal
 
     def propose_adversarial_cases(self, proposal):
@@ -28,6 +28,47 @@ class AdversarialGenerator:
 
 
 class FoundryTests(unittest.TestCase):
+    def test_live_generator_receives_matched_repository_context_and_relationship(self):
+        """The Foundry gives a live proposal only the code graph says is relevant."""
+
+        class CapturingGenerator:
+            def __init__(self):
+                self.contexts = []
+
+            def propose(self, task, payload, repository_context=None):
+                self.contexts.append(repository_context)
+                return ToolProposal(
+                    "date_format_normalizer",
+                    "Normalize dates.",
+                    "def run(payload):\n    return payload['text']\n",
+                    (({"text": "2026/7/4"}, "2026/7/4"),),
+                    "fake live proposal",
+                    "EXTEND: Reuse the repository helper's ISO-date pattern while adding import-log handling.",
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "calendar_helpers.py").write_text(
+                'def canonicalize_value(payload):\n'
+                '    """Normalize date values into ISO calendar format."""\n'
+                '    return payload\n'
+            )
+            generator = CapturingGenerator()
+            foundry = CapabilityFoundry(root / "registry.json", root=root, generator=generator)
+            outcome = foundry.run("Normalize inconsistent date formats in this import log", {"text": "2026/7/4"})
+            audit_text = (root / "audit_log.jsonl").read_text(encoding="utf-8")
+
+        self.assertEqual(outcome["status"], "trusted")
+        self.assertEqual(len(generator.contexts), 1)
+        context = generator.contexts[0]
+        self.assertIn("calendar_helpers.py", context)
+        self.assertIn("canonicalize_value", context)
+        self.assertIn("Normalize date values into ISO calendar format.", context)
+        self.assertEqual(outcome["relationship"], "EXTEND: Reuse the repository helper's ISO-date pattern while adding import-log handling.")
+        builder = next(item for item in outcome["council"] if item["role"] == "builder")
+        self.assertIn("EXTEND:", builder["detail"])
+        self.assertIn("EXTEND:", audit_text)
+
     def test_curated_capability_is_proven_then_reused(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -95,6 +136,7 @@ class FoundryTests(unittest.TestCase):
             foundry = CapabilityFoundry(Path(directory) / "registry.json", root=directory)
             outcome = foundry.run("Normalize inconsistent date formats in this import log", {"text": "batch=A 03/07/2026"})
             self.assertEqual(outcome["status"], "trusted")
+            self.assertNotIn("relationship", outcome)
             with self.assertRaisesRegex(RuntimeError, "Live adversarial proof requires OPENAI_API_KEY"):
                 foundry.run("Normalize inconsistent date formats in this import log", {"text": "batch=A 03/07/2026"}, adversarial_proof=True)
             self.assertEqual(RECORDED_ADVERSARIAL_EXAMPLE["label"], "curated offline adversarial proof recording")

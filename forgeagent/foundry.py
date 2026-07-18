@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 from forgeagent.agent import BLUEPRINTS, ForgeAgent
 from forgeagent.audit import AuditLog
@@ -73,11 +73,19 @@ class CapabilityFoundry:
             self._record_decision(decisions, capability, "builder", "skipped", "A trusted capability already exists.")
             self._record_decision(decisions, capability, "governor", "reused", f"Reused {capability} without creating new code.")
             return self._outcome(task, capability, "reused", result, inspection, decisions)
-        proposal = self._proposal(task, payload, blueprint)
+        repository_context = self._repository_context(inspection) if self.generator else None
+        proposal = self._proposal(task, payload, blueprint, repository_context)
         threat: dict[str, object] | None = None
         report: dict[str, object] | None = None
         for attempt in range(max_repairs + 1):
-            self._record_decision(decisions, capability, "builder", "complete" if attempt == 0 else "repaired", f"Produced constrained candidate '{proposal.name}' (attempt {attempt + 1}).")
+            relationship = f" Relationship: {proposal.relationship}" if proposal.relationship else ""
+            self._record_decision(
+                decisions,
+                capability,
+                "builder",
+                "complete" if attempt == 0 else "repaired",
+                f"Produced constrained candidate '{proposal.name}' (attempt {attempt + 1}).{relationship}",
+            )
             threat = self.proofs.threat_model(proposal)
             self._record_decision(decisions, capability, "security", "complete", f"Threat model found {len(threat['policy_findings'])} policy findings.")
             adversarial_cases = self._adversarial_cases(proposal) if adversarial_proof else []
@@ -89,7 +97,11 @@ class CapabilityFoundry:
                 break
             failure = "; ".join(result["detail"] for result in report["results"] if not result["passed"])
             self._record_decision(decisions, capability, "planner", "repair_requested", f"Candidate failed proof: {failure}")
-            proposal = self.generator.propose(f"{task}\nRepair the prior candidate. Failure evidence: {failure}", payload)
+            proposal = self.generator.propose(
+                f"{task}\nRepair the prior candidate. Failure evidence: {failure}",
+                payload,
+                repository_context=repository_context,
+            )
         assert threat is not None and report is not None
         record = self.store.promote(
             self.project_id, proposal.name, proposal.source, proposal.provenance,
@@ -97,7 +109,7 @@ class CapabilityFoundry:
         )
         if record.state != "trusted":
             self._record_decision(decisions, capability, "governor", record.state, "Capability was retained as evidence but not executed.")
-            return self._outcome(task, capability, record.state, None, inspection, decisions, threat, report, record)
+            return self._outcome(task, capability, record.state, None, inspection, decisions, threat, report, record, proposal.relationship if self.generator else None)
         agent = ForgeAgent(self.registry, emit=lambda _: None)
         # A newly promoted proposal must still replace an existing registry
         # version through the full verification path; never treat a version
@@ -113,14 +125,80 @@ class CapabilityFoundry:
             proof_case_count=executed_proof_cases,
         )
         self._record_decision(decisions, capability, "governor", "trusted", f"Promoted {record.name}@v{record.version} after policy and proof.")
-        return self._outcome(task, capability, "trusted", result, inspection, decisions, threat, report, record)
+        return self._outcome(task, capability, "trusted", result, inspection, decisions, threat, report, record, proposal.relationship if self.generator else None)
 
-    def _proposal(self, task: str, payload: dict[str, object], blueprint: object | None) -> ToolProposal:
+    def _proposal(self, task: str, payload: dict[str, object], blueprint: object | None, repository_context: str | None = None) -> ToolProposal:
         if self.generator:
-            return self.generator.propose(task, payload)
+            return self.generator.propose(task, payload, repository_context=repository_context)
         if blueprint is None:
             raise RuntimeError("A live gpt-5.6-terra generator is required for an unknown capability. Set OPENAI_API_KEY or choose a supported curated capability.")
         return ToolProposal(blueprint.name, blueprint.description, blueprint.source, ((blueprint.test_input, blueprint.expected_output),), "curated offline Foundry proposal")
+
+    def _repository_context(self, inspection: dict[str, object]) -> str | None:
+        """Format only graph-matched definitions for a live proposal prompt.
+
+        The graph supplies file paths and symbol names; this method re-parses
+        only those definitions to avoid sending an entire repository (or an
+        unrelated neighbouring function) to the generator.
+        """
+        impact = inspection.get("impact")
+        graph = inspection.get("graph")
+        if not isinstance(impact, dict) or not isinstance(graph, dict):
+            return None
+        paths = {value for value in impact.get("impact_candidates", []) if isinstance(value, str)}
+        symbols = {value for value in impact.get("related_symbols", []) if isinstance(value, str)}
+        nodes = graph.get("nodes", [])
+        if not paths or not symbols or not isinstance(nodes, list):
+            return None
+
+        excerpts: list[str] = []
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            path, label, kind = node.get("path"), node.get("label"), node.get("kind")
+            if not isinstance(path, str) or not isinstance(label, str) or not isinstance(kind, str):
+                continue
+            if path not in paths or label not in symbols or kind not in {"function", "class", "capability"}:
+                continue
+            excerpt = self._symbol_excerpt(path, label, kind)
+            if excerpt:
+                excerpts.append(excerpt)
+            if len(excerpts) == 2:
+                break
+        return "\n\n".join(excerpts) or None
+
+    def _symbol_excerpt(self, relative_path: str, symbol: str, kind: str) -> str | None:
+        """Return a bounded definition excerpt for one graph-matched symbol."""
+        path = (self.root / relative_path).resolve()
+        try:
+            path.relative_to(self.root.resolve())
+            text = path.read_text(encoding="utf-8")
+            tree = ast.parse(text)
+        except (OSError, SyntaxError, UnicodeDecodeError, ValueError):
+            return None
+        if kind in {"function", "class"}:
+            definitions = (
+                node for node in tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and node.name == symbol
+            )
+            node = next(definitions, None)
+            if node is None:
+                return None
+            docstring = ast.get_docstring(node) or "(no docstring)"
+            source = ast.get_source_segment(text, node) or ""
+            excerpt = "\n".join(source.splitlines()[:14])
+            return f"File: {relative_path}\nSymbol: {symbol}\nDocstring: {docstring}\nExcerpt:\n{excerpt}"
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or node.func.id != "ToolBlueprint":
+                continue
+            if len(node.args) < 3 or not all(isinstance(arg, ast.Constant) and isinstance(arg.value, str) for arg in node.args[:3]):
+                continue
+            if node.args[0].value != symbol:
+                continue
+            description, source = node.args[1].value, node.args[2].value
+            excerpt = "\n".join(source.splitlines()[:14])
+            return f"File: {relative_path}\nCapability: {symbol}\nDescription: {description}\nExcerpt:\n{excerpt}"
+        return None
 
     def _adversarial_cases(self, proposal: ToolProposal) -> list[ProofCase]:
         generator = self.generator
@@ -137,5 +215,8 @@ class CapabilityFoundry:
         return "_".join(re.findall(r"[a-z0-9]+", task.lower())[:5]) or "unnamed_capability"
 
     @staticmethod
-    def _outcome(task: str, capability: str, status: str, result: object, inspection: dict[str, object], decisions: list[CouncilDecision], threat: dict[str, object] | None = None, proof: dict[str, object] | None = None, record: object | None = None) -> dict[str, object]:
-        return {"task": task, "capability": capability, "status": status, "result": result, "council": [asdict(decision) for decision in decisions], "inspection": {"impact": inspection["impact"], "existing_trusted_tool": inspection["existing_trusted_tool"], "match_count": len(inspection["repository_matches"])}, "threat_model": threat, "proof": proof, "memory_record": asdict(record) if record else None}
+    def _outcome(task: str, capability: str, status: str, result: object, inspection: dict[str, object], decisions: list[CouncilDecision], threat: dict[str, object] | None = None, proof: dict[str, object] | None = None, record: object | None = None, relationship: str | None = None) -> dict[str, object]:
+        outcome = {"task": task, "capability": capability, "status": status, "result": result, "council": [asdict(decision) for decision in decisions], "inspection": {"impact": inspection["impact"], "existing_trusted_tool": inspection["existing_trusted_tool"], "match_count": len(inspection["repository_matches"])}, "threat_model": threat, "proof": proof, "memory_record": asdict(record) if record else None}
+        if relationship:
+            outcome["relationship"] = relationship
+        return outcome

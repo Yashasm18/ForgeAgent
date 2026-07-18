@@ -20,6 +20,7 @@ class StructuredOutputGeneratorTests(unittest.TestCase):
                 "description": "Extract invoice IDs from support logs.",
                 "source": "def run(payload):\n    return []\n",
                 "tests": [{"input": {"text": "INV-1"}, "expected_output": ["INV-1"]}],
+                "relationship": "EXTEND: Reuse the matched invoice parser's identifier pattern while adding log extraction.",
             },
             {"capability_name": "invoice_id_extractor"},
             {
@@ -37,7 +38,11 @@ class StructuredOutputGeneratorTests(unittest.TestCase):
 
         with patch("forgeagent.generator.urllib.request.urlopen", side_effect=fake_urlopen):
             generator = GPT56Generator(api_key="test-key")
-            proposal = generator.propose("Extract invoice IDs", {"text": "INV-1"})
+            proposal = generator.propose(
+                "Extract invoice IDs",
+                {"text": "INV-1"},
+                repository_context="File: parser.py\nSymbol: parse_invoice\nDocstring: Parse invoice identifiers.\nExcerpt:\ndef parse_invoice(payload):\n    return payload",
+            )
             match = generator.match_existing_capability(
                 "Find the invoice identifier",
                 [{"name": "invoice_id_extractor", "description": "Extract invoice IDs from support logs."}],
@@ -46,6 +51,7 @@ class StructuredOutputGeneratorTests(unittest.TestCase):
 
         # Each mocked response is plain JSON, with no Markdown fence to strip.
         self.assertEqual(proposal.name, "invoice_id_extractor")
+        self.assertTrue(proposal.relationship.startswith("EXTEND:"))
         self.assertEqual(match, "invoice_id_extractor")
         self.assertEqual(len(cases), 2)
 
@@ -65,6 +71,10 @@ class StructuredOutputGeneratorTests(unittest.TestCase):
                     "schema": schema,
                 },
             })
+        proposal_prompt = request_bodies[0]["input"][1]["content"][0]["text"]
+        self.assertIn("parser.py", proposal_prompt)
+        self.assertIn("parse_invoice", proposal_prompt)
+        self.assertIn("Relevant existing repository context", proposal_prompt)
 
 
 if __name__ == "__main__":

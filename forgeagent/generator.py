@@ -22,6 +22,9 @@ class ToolProposal:
     source: str
     tests: tuple[tuple[object, object], ...]
     provenance: str
+    # Live proposals state how they relate to inspected repository code.
+    # The default preserves every curated/offline constructor and flow.
+    relationship: str = ""
 
 
 @dataclass(frozen=True)
@@ -35,7 +38,7 @@ class ProofCase:
 
 
 class ProposalGenerator(Protocol):
-    def propose(self, capability: str, payload: object) -> ToolProposal: ...
+    def propose(self, capability: str, payload: object, repository_context: str | None = None) -> ToolProposal: ...
     def propose_adversarial_cases(self, proposal: ToolProposal) -> list[ProofCase]: ...
 
 
@@ -44,12 +47,15 @@ class GeneratorError(RuntimeError):
 
 
 SYSTEM_PROMPT = """You generate one tiny, deterministic Python data tool for ForgeAgent.
-Return JSON only with keys name, description, source, tests.
+Return JSON only with keys name, description, source, tests, relationship.
 source must define exactly run(payload). tests is an array of objects with input and expected_output.
 The tool receives JSON-compatible payload and returns JSON-compatible data.
 No filesystem, network, subprocesses, reflection, eval, exec, globals, or imports outside:
 collections,csv,datetime,json,math,re,statistics,string.
-Use at least two meaningful edge-case tests. Keep source under 120 lines."""
+Use at least two meaningful edge-case tests. Keep source under 120 lines.
+When repository context is supplied, relationship must begin with exactly one
+of REUSE:, EXTEND:, or SEPARATE: and briefly explain the decision. Do not
+duplicate supplied code without a stated reason."""
 
 PLAN_PROMPT = """You are ForgeAgent's capability planner. Return JSON only:
 {"steps":[{"id":"short_id","task":"specific capability request","payload":{},"depends_on":[]}]}
@@ -85,6 +91,11 @@ PROPOSAL_SCHEMA: dict[str, object] = {
         "name": {"type": "string"},
         "description": {"type": "string"},
         "source": {"type": "string"},
+        "relationship": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Begin with REUSE:, EXTEND:, or SEPARATE: and explain the repository-context decision.",
+        },
         "tests": {
             "type": "array",
             "minItems": 1,
@@ -99,7 +110,7 @@ PROPOSAL_SCHEMA: dict[str, object] = {
             },
         },
     },
-    "required": ["name", "description", "source", "tests"],
+    "required": ["name", "description", "source", "tests", "relationship"],
 }
 
 CAPABILITY_MATCH_SCHEMA: dict[str, object] = {
@@ -148,10 +159,17 @@ class GPT56Generator:
         if not self.api_key:
             raise GeneratorError("OPENAI_API_KEY is required for live GPT-5.6 generation")
 
-    def propose(self, capability: str, payload: object) -> ToolProposal:
+    def propose(self, capability: str, payload: object, repository_context: str | None = None) -> ToolProposal:
+        context = (
+            "\n\nRelevant existing repository context (matched symbols only):\n"
+            f"{repository_context}\n"
+            "Use this narrow evidence to decide whether to reuse a pattern, extend it, or build a separate capability."
+            if repository_context
+            else "\n\nNo relevant repository code was supplied. Set relationship to SEPARATE: and state why a standalone capability is warranted."
+        )
         text = self._complete(
             SYSTEM_PROMPT,
-            f"Capability: {capability}\nExample payload: {json.dumps(payload)}",
+            f"Capability: {capability}\nExample payload: {json.dumps(payload)}{context}",
             schema_name="forgeagent_tool_proposal",
             schema=PROPOSAL_SCHEMA,
         )
@@ -248,7 +266,10 @@ def _parse_proposal(text: str, provenance: str) -> ToolProposal:
         tests = tuple((item["input"], item["expected_output"]) for item in data["tests"])
         if not tests:
             raise ValueError("no tests")
-        return ToolProposal(data["name"], data["description"], data["source"], tests, provenance)
+        relationship = data["relationship"]
+        if not isinstance(relationship, str) or not relationship.startswith(("REUSE:", "EXTEND:", "SEPARATE:")):
+            raise ValueError("relationship must begin with REUSE:, EXTEND:, or SEPARATE:")
+        return ToolProposal(data["name"], data["description"], data["source"], tests, provenance, relationship)
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise GeneratorError("GPT-5.6 proposal was not valid ForgeAgent JSON") from exc
 
