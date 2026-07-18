@@ -1,0 +1,3 @@
+# Optional: required only for Ed25519 capability package export/import signing.
+# The offline demo, benchmark, evaluation, MCP server, and dashboard do not load it.
+cryptography>=42,<49

@@ -369,9 +369,22 @@ capability memory, audit receipts, and human approval decisions. Copy
 repository path, and register it in a compatible client such as Codex, Cursor,
 or Claude Code.
 
-The `PlatformStore` can export a trusted capability as an HMAC-SHA256 signed
-package with source, provenance, and proof evidence. Imports always enter
-review state in the receiving project; they cannot silently become trusted.
+Capability package signing is optional and is the only feature that needs the
+maintained `cryptography` package:
+
+```bash
+python3 -m pip install -r requirements-signing.txt
+```
+
+`PlatformStore.generate_signing_keypair()` creates an Ed25519 demo keypair;
+an export is signed by its private key and an import verifies against a trusted
+public key. Package metadata includes a signer key ID, package ID, and schema
+compatibility range. Revoked signer keys or package IDs are rejected before
+import. The local keypair is a hackathon demonstration only—production keys
+should be held and rotated by a KMS/HSM or equivalent key-management system.
+Imports always enter review state in the receiving project; they cannot
+silently become trusted. The offline demo, benchmark, evaluation, MCP server,
+and dashboard do not import or require this optional package.
 
 ## Control plane and coding-agent integration
 
