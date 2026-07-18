@@ -54,10 +54,12 @@ class RepositoryGraph:
 
     def impact(self, capability: str) -> dict[str, object]:
         """Return conservative impact candidates; it never claims certainty."""
-        terms = {part for part in re.split(r"[^a-z0-9]+", capability.lower()) if len(part) >= 3}
-        relevant = [node for node in self.nodes.values() if any(term in f"{node.label} {node.path}".lower() for term in terms)]
-        files = sorted({node.path for node in relevant if node.kind in {"file", "test", "document"}})
-        symbols = sorted(node.label for node in relevant if node.kind in {"function", "class", "heading"})
+        terms = self._tokens(capability)
+        relevant = [node for node in self.nodes.values() if terms & self._node_tokens(node)]
+        # A matched symbol makes its defining file an impact candidate. This
+        # avoids requiring a filename to repeat the capability's terminology.
+        files = sorted({node.path for node in relevant if node.path})
+        symbols = sorted(node.label for node in relevant if node.kind in {"function", "class", "heading", "capability"})
         return {"capability": capability, "impact_candidates": files, "related_symbols": symbols, "confidence": "heuristic; inspect before modifying"}
 
     def export(self) -> dict[str, object]:
@@ -94,7 +96,13 @@ class RepositoryGraph:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 kind = "class" if isinstance(node, ast.ClassDef) else "function"
                 symbol_id = self._id(kind, f"{relative}:{node.name}")
-                self.nodes[symbol_id] = RepoNode(symbol_id, kind, node.name, relative, {"line": node.lineno})
+                self.nodes[symbol_id] = RepoNode(
+                    symbol_id,
+                    kind,
+                    node.name,
+                    relative,
+                    {"line": node.lineno, "docstring": ast.get_docstring(node) or ""},
+                )
                 self.edges.add(RepoEdge(file_id, symbol_id, "defines"))
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 modules = [alias.name.split(".")[0] for alias in node.names] if isinstance(node, ast.Import) else [(node.module or "").split(".")[0]]
@@ -104,6 +112,8 @@ class RepositoryGraph:
                     import_id = self._id("module", module)
                     self.nodes.setdefault(import_id, RepoNode(import_id, "module", module, "", {}))
                     self.edges.add(RepoEdge(file_id, import_id, "imports"))
+            if isinstance(node, ast.Assign):
+                self._add_capability_nodes(file_id, relative, node)
 
     def _add_markdown(self, file_id: str, relative: str, text: str) -> None:
         for line_number, line in enumerate(text.splitlines(), 1):
@@ -114,6 +124,39 @@ class RepositoryGraph:
             heading_id = self._id("heading", f"{relative}:{label}")
             self.nodes[heading_id] = RepoNode(heading_id, "heading", label, relative, {"level": len(match.group(1)), "line": line_number})
             self.edges.add(RepoEdge(file_id, heading_id, "documents"))
+
+    def _add_capability_nodes(self, file_id: str, relative: str, node: ast.Assign) -> None:
+        """Index literal ToolBlueprint records as reusable capability evidence.
+
+        The Foundry's curated capabilities are data, not top-level functions,
+        so symbol-only graphing previously hid the most relevant duplicate-work
+        signal in this repository.
+        """
+        for call in ast.walk(node.value):
+            if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Name) or call.func.id != "ToolBlueprint":
+                continue
+            if len(call.args) < 2 or not all(isinstance(arg, ast.Constant) and isinstance(arg.value, str) for arg in call.args[:2]):
+                continue
+            name, description = call.args[0].value, call.args[1].value
+            capability_id = self._id("capability", f"{relative}:{name}")
+            self.nodes[capability_id] = RepoNode(
+                capability_id,
+                "capability",
+                name,
+                relative,
+                {"line": call.lineno, "description": description},
+            )
+            self.edges.add(RepoEdge(file_id, capability_id, "declares"))
+
+    @staticmethod
+    def _tokens(value: object) -> set[str]:
+        """Return exact identifier/documentation tokens, not substrings."""
+        words = re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+", str(value))
+        return {word.lower() for word in words if len(word) >= 3}
+
+    @classmethod
+    def _node_tokens(cls, node: RepoNode) -> set[str]:
+        return cls._tokens(f"{node.label} {node.path} {node.metadata.get('docstring', '')} {node.metadata.get('description', '')}")
 
     @staticmethod
     def _id(kind: str, value: str) -> str:
