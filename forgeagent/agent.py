@@ -147,13 +147,14 @@ class ForgeAgent:
     def forge(self, capability: str, payload: object, max_repairs: int = 2) -> object:
         """Create, verify, persist, and run a constrained capability proposal."""
         if not self.generator:
-            raise RuntimeError("No GPT-5.6 generator configured. Set OPENAI_API_KEY and use live mode.")
+            raise RuntimeError("No live generator configured. Use OpenAI, local Ollama, or a supported offline capability.")
         self.emit(f"\nREQUEST  {capability}")
         self.audit.record("capability_requested", capability, "Agent identified a capability gap", "pending")
         if getattr(self.generator, "offline_template_only", False):
             self.emit("PLAN     Selecting a reviewed local template and deterministic proof cases...")
         else:
-            self.emit("PLAN     Asking GPT-5.6 for a constrained tool and edge-case tests...")
+            provider = getattr(self.generator, "provider_label", "the configured live provider")
+            self.emit(f"PLAN     Asking {provider} for a constrained tool and edge-case tests...")
         failure = ""
         for attempt in range(max_repairs + 1):
             prompt = capability if not failure else f"{capability}. Repair the previous proposal; failure: {failure}"
@@ -274,7 +275,11 @@ class ForgeAgent:
             )
             for item in raw_steps
         )
-        planner = "Deterministic offline planner" if getattr(self.generator, "offline_template_only", False) else "GPT-5.6"
+        planner = (
+            "Deterministic offline planner"
+            if getattr(self.generator, "offline_template_only", False)
+            else getattr(self.generator, "provider_label", "the configured live provider")
+        )
         self.audit.record("task_planned", user_task, f"{planner} proposed {len(steps)} dependent capability steps", "pending")
         return self.execute_plan(user_task, steps)
 

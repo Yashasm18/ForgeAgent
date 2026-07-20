@@ -1,11 +1,28 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from forgeagent.control_plane import AuthorizationError, ControlPlane
+from forgeagent.generator import OllamaGenerator
 
 
 class ControlPlaneTests(unittest.TestCase):
+    def test_mcp_api_provider_selection_can_use_local_ollama(self):
+        with patch.dict(
+            "os.environ",
+            {
+                "FORGEAGENT_PROVIDER": "ollama",
+                "FORGEAGENT_OLLAMA_MODEL": "local-test-model",
+                "FORGEAGENT_OLLAMA_HOST": "http://127.0.0.1:11434",
+            },
+            clear=False,
+        ):
+            generator = ControlPlane._request_generator()
+
+        self.assertIsInstance(generator, OllamaGenerator)
+        self.assertEqual(generator.model, "local-test-model")
+
     def test_tenant_roles_tokens_and_production_request(self):
         with tempfile.TemporaryDirectory() as directory:
             plane = ControlPlane(directory)

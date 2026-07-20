@@ -122,6 +122,30 @@ CAPABILITY_MATCH_SCHEMA: dict[str, object] = {
     "required": ["capability_name"],
 }
 
+PLAN_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "steps": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "id": {"type": "string"},
+                    "task": {"type": "string"},
+                    "payload": {"type": "object"},
+                    "depends_on": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["id", "task", "payload", "depends_on"],
+            },
+        },
+    },
+    "required": ["steps"],
+}
+
 ADVERSARIAL_CASES_SCHEMA: dict[str, object] = {
     "type": "object",
     "additionalProperties": False,
@@ -152,12 +176,17 @@ class GPT56Generator:
     # ForgeAgent checks this explicit capability rather than treating arbitrary
     # proposal generators as live classifiers. Offline fixtures stay offline.
     semantic_matching_available = True
+    provider = "openai"
 
     def __init__(self, api_key: str | None = None, model: str = "gpt-5.6-terra"):
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         self.model = model
         if not self.api_key:
             raise GeneratorError("OPENAI_API_KEY is required for live GPT-5.6 generation")
+
+    @property
+    def provider_label(self) -> str:
+        return f"OpenAI ({self.model})"
 
     def propose(self, capability: str, payload: object, repository_context: str | None = None) -> ToolProposal:
         context = (
@@ -177,14 +206,7 @@ class GPT56Generator:
 
     def plan(self, user_task: str, payload: object) -> list[dict[str, object]]:
         text = self._complete(PLAN_PROMPT, f"User task: {user_task}\nInput: {json.dumps(payload)}")
-        try:
-            data = json.loads(text)
-            steps = data["steps"]
-            if not isinstance(steps, list) or not steps:
-                raise ValueError("empty plan")
-            return steps
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            raise GeneratorError("GPT-5.6 plan was not valid ForgeAgent JSON") from exc
+        return _parse_plan(text, f"GPT-5.6 ({self.model})")
 
     def propose_adversarial_cases(self, proposal: ToolProposal) -> list[ProofCase]:
         """Ask GPT-5.6 to attack a candidate before it can earn trust."""
@@ -260,6 +282,131 @@ class GPT56Generator:
         return text
 
 
+class OllamaGenerator:
+    """Dependency-free local Ollama provider for ForgeAgent's live contracts.
+
+    This is intentionally a provider, not a fallback: callers opt into it and
+    retain the exact same proposal, proof, repair, and governance path as the
+    OpenAI provider.  No API key is read or transmitted for a local host.
+    """
+
+    semantic_matching_available = True
+    provider = "ollama"
+
+    def __init__(
+        self,
+        model: str | None = None,
+        host: str | None = None,
+    ) -> None:
+        self.model = model or os.environ.get("FORGEAGENT_OLLAMA_MODEL", "qwen2.5-coder:14b")
+        configured_host = host or os.environ.get("FORGEAGENT_OLLAMA_HOST") or os.environ.get("OLLAMA_HOST") or "http://127.0.0.1:11434"
+        self.host = configured_host.rstrip("/")
+        if not self.model.strip():
+            raise GeneratorError("An Ollama model is required. Set FORGEAGENT_OLLAMA_MODEL or pass --ollama-model.")
+        if not self.host.startswith(("http://", "https://")):
+            raise GeneratorError("Ollama host must be an http(s) URL, for example http://127.0.0.1:11434.")
+
+    @property
+    def provider_label(self) -> str:
+        return f"Ollama ({self.model})"
+
+    def propose(self, capability: str, payload: object, repository_context: str | None = None) -> ToolProposal:
+        context = (
+            "\n\nRelevant existing repository context (matched symbols only):\n"
+            f"{repository_context}\n"
+            "Use this narrow evidence to decide whether to reuse a pattern, extend it, or build a separate capability."
+            if repository_context
+            else "\n\nNo relevant repository code was supplied. Set relationship to SEPARATE: and state why a standalone capability is warranted."
+        )
+        text = self._complete(
+            SYSTEM_PROMPT,
+            f"Capability: {capability}\nExample payload: {json.dumps(payload)}{context}",
+            PROPOSAL_SCHEMA,
+        )
+        return _parse_proposal(text, self.provider_label)
+
+    def plan(self, user_task: str, payload: object) -> list[dict[str, object]]:
+        text = self._complete(PLAN_PROMPT, f"User task: {user_task}\nInput: {json.dumps(payload)}", PLAN_SCHEMA)
+        return _parse_plan(text, self.provider_label)
+
+    def propose_adversarial_cases(self, proposal: ToolProposal) -> list[ProofCase]:
+        candidate = {
+            "name": proposal.name,
+            "description": proposal.description,
+            "source": proposal.source,
+            "existing_tests": [{"input": input_value, "expected_output": expected} for input_value, expected in proposal.tests],
+        }
+        text = self._complete(
+            ADVERSARIAL_PROMPT,
+            f"Candidate to attack:\n{json.dumps(candidate)}",
+            ADVERSARIAL_CASES_SCHEMA,
+        )
+        return _parse_adversarial_cases(text)
+
+    def match_existing_capability(self, task: str, capabilities: list[dict[str, str]]) -> str | None:
+        catalog = [{"name": item["name"], "description": item["description"]} for item in capabilities]
+        text = self._complete(
+            CAPABILITY_MATCH_PROMPT,
+            f"Task: {task}\nExisting capability catalog: {json.dumps(catalog)}",
+            CAPABILITY_MATCH_SCHEMA,
+        )
+        return _parse_capability_match(text, {item["name"] for item in catalog})
+
+    def _complete(self, system_prompt: str, user_text: str, schema: dict[str, object]) -> str:
+        # Ollama's native API accepts the JSON Schema directly in `format`.
+        # Repeating it in the prompt follows Ollama's structured-output
+        # guidance and helps smaller local models honour nested contracts.
+        grounded_user_text = f"{user_text}\n\nRequired JSON Schema:\n{json.dumps(schema, sort_keys=True)}"
+        request_body = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": grounded_user_text},
+            ],
+            "format": schema,
+            "stream": False,
+            "options": {"temperature": 0},
+        }
+        request = urllib.request.Request(
+            f"{self.host}/api/chat",
+            data=json.dumps(request_body).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                body = json.load(response)
+        except urllib.error.HTTPError as exc:
+            raise GeneratorError(f"Ollama request failed: HTTP {exc.code}") from exc
+        except urllib.error.URLError as exc:
+            raise GeneratorError(
+                f"Ollama is unavailable at {self.host}. Start it with `ollama serve` and pull `{self.model}`."
+            ) from exc
+        if isinstance(body.get("error"), str):
+            raise GeneratorError(f"Ollama request failed: {body['error']}")
+        message = body.get("message")
+        text = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(text, str) or not text.strip():
+            raise GeneratorError("Ollama returned no structured text response")
+        return text
+
+
+def create_live_generator(
+    provider: str,
+    *,
+    openai_model: str = "gpt-5.6-terra",
+    ollama_model: str | None = None,
+    ollama_host: str | None = None,
+) -> ProposalGenerator:
+    """Create an explicitly selected live provider; never silently switch one."""
+    normalized = provider.strip().lower()
+    if normalized == "openai":
+        return GPT56Generator(model=openai_model)
+    if normalized == "ollama":
+        return OllamaGenerator(model=ollama_model, host=ollama_host)
+    raise GeneratorError("provider must be 'openai' or 'ollama'")
+
+
 def _parse_proposal(text: str, provenance: str) -> ToolProposal:
     try:
         data = json.loads(text)
@@ -271,7 +418,18 @@ def _parse_proposal(text: str, provenance: str) -> ToolProposal:
             raise ValueError("relationship must begin with REUSE:, EXTEND:, or SEPARATE:")
         return ToolProposal(data["name"], data["description"], data["source"], tests, provenance, relationship)
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise GeneratorError("GPT-5.6 proposal was not valid ForgeAgent JSON") from exc
+        raise GeneratorError("Live generator proposal was not valid ForgeAgent JSON") from exc
+
+
+def _parse_plan(text: str, provider_label: str) -> list[dict[str, object]]:
+    try:
+        data = json.loads(text)
+        steps = data["steps"]
+        if not isinstance(steps, list) or not steps:
+            raise ValueError("empty plan")
+        return steps
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise GeneratorError(f"{provider_label} plan was not valid ForgeAgent JSON") from exc
 
 
 def _parse_adversarial_cases(text: str) -> list[ProofCase]:
@@ -288,7 +446,7 @@ def _parse_adversarial_cases(text: str) -> list[ProofCase]:
                 raise ValueError("missing adversarial rationale")
         return cases
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise GeneratorError("GPT-5.6 adversarial proof cases were not valid ForgeAgent JSON") from exc
+        raise GeneratorError("Live generator adversarial proof cases were not valid ForgeAgent JSON") from exc
 
 
 def _parse_capability_match(text: str, allowed_names: set[str]) -> str | None:
@@ -302,4 +460,4 @@ def _parse_capability_match(text: str, allowed_names: set[str]) -> str | None:
             raise ValueError("response selected a capability outside the supplied catalog")
         return name
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-        raise GeneratorError("GPT-5.6 semantic match was not valid ForgeAgent JSON") from exc
+        raise GeneratorError("Live generator semantic match was not valid ForgeAgent JSON") from exc

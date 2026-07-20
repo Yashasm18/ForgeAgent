@@ -15,12 +15,22 @@ from forgeagent.dashboard import serve
 from forgeagent.demo_tasks import DEMO_TASKS, SHOWCASE_TASKS
 from forgeagent.evaluation import run_evaluation_suite
 from forgeagent.foundry import CapabilityFoundry
-from forgeagent.generator import GPT56Generator, GeneratorError
+from forgeagent.generator import GeneratorError, create_live_generator
 from forgeagent.mcp_server import main as mcp_main
 from forgeagent.offline_intelligence import OfflineTemplateGenerator
 from forgeagent.repository_graph import RepositoryGraph
 from forgeagent.registry import ToolRegistry
 from forgeagent.workflows import INCIDENT_RECOVERY_PLAN
+
+
+def _selected_live_generator(args: argparse.Namespace):
+    """Build the explicitly requested live provider for every CLI live path."""
+    return create_live_generator(
+        args.provider,
+        openai_model=args.model,
+        ollama_model=args.ollama_model,
+        ollama_host=args.ollama_host,
+    )
 
 
 def main() -> None:
@@ -31,14 +41,14 @@ def main() -> None:
     parser.add_argument("--autonomy-demo", action="store_true", help="Run a dependency-aware task recovery plan")
     parser.add_argument("--compare", action="store_true", help="Compare stateless execution with ForgeAgent memory")
     parser.add_argument("--graph", action="store_true", help="Export ForgeAgent's task-to-capability graph as JSON")
-    parser.add_argument("--autonomous-task", help="Use GPT-5.6 to plan, forge, repair, and complete an unknown user task")
+    parser.add_argument("--autonomous-task", help="Use the selected live provider to plan, forge, repair, and complete an unknown user task")
     parser.add_argument("--offline-autonomous-task", help="Use the deterministic offline planner for known capabilities and reviewed templates")
     parser.add_argument("--foundry-task", help="Run the Capability Foundry council on a task")
-    parser.add_argument("--foundry-live", action="store_true", help="Use GPT-5.6-terra for Foundry planning and proposals")
+    parser.add_argument("--foundry-live", action="store_true", help="Use the selected live provider for Foundry planning and proposals")
     parser.add_argument("--offline-foundry", action="store_true", help="Use reviewed deterministic templates for supported Foundry gaps; no API key or network calls")
     parser.add_argument("--project", default="local/default", help="Foundry project namespace")
     parser.add_argument("--approval-policy", choices=("auto", "review", "never", "production"), default="auto", help="Capability promotion policy (production always requires named human approval)")
-    parser.add_argument("--adversarial-proof", action="store_true", help="Use live GPT-5.6 to generate adversarial proof cases for --foundry-task (requires --foundry-live and OPENAI_API_KEY)")
+    parser.add_argument("--adversarial-proof", action="store_true", help="Use the selected live provider to generate adversarial proof cases for --foundry-task (requires --foundry-live)")
     parser.add_argument("--offline-adversarial-proof", action="store_true", help="Use deterministic adversarial cases registered for an offline template (requires --offline-foundry)")
     parser.add_argument("--repo-graph", action="store_true", help="Export the repository intelligence graph")
     parser.add_argument("--evaluate", action="store_true", help="Run the 50-case Foundry Evaluation Arena")
@@ -50,9 +60,12 @@ def main() -> None:
     parser.add_argument("--list-tools", action="store_true", help="List registered verified tools")
     parser.add_argument("--task", help="One supported task")
     parser.add_argument("--text", help="Text input for --task")
-    parser.add_argument("--forge", help="Create a new verified tool with GPT-5.6 for this capability")
+    parser.add_argument("--forge", help="Create a new verified tool with the selected live provider")
     parser.add_argument("--payload", help="JSON payload used with --forge")
-    parser.add_argument("--model", default="gpt-5.6-terra", help="OpenAI model for live forging (default: gpt-5.6-terra)")
+    parser.add_argument("--provider", choices=("openai", "ollama"), default="openai", help="Live model provider (default: openai)")
+    parser.add_argument("--model", default="gpt-5.6-terra", help="OpenAI model for live generation (default: gpt-5.6-terra)")
+    parser.add_argument("--ollama-model", help="Local Ollama model; defaults to FORGEAGENT_OLLAMA_MODEL or qwen2.5-coder:14b")
+    parser.add_argument("--ollama-host", help="Ollama host URL; defaults to FORGEAGENT_OLLAMA_HOST, OLLAMA_HOST, or http://127.0.0.1:11434")
     parser.add_argument("--serve", action="store_true", help="Open the zero-dependency Forge Ledger dashboard")
     parser.add_argument("--port", type=int, default=8787, help="Dashboard port (default: 8787)")
     args = parser.parse_args()
@@ -90,8 +103,10 @@ def main() -> None:
                 parser.error("Choose either --foundry-live or --offline-foundry, not both.")
             if args.offline_adversarial_proof and not args.offline_foundry:
                 parser.error("--offline-adversarial-proof requires --offline-foundry.")
+            if args.adversarial_proof and not args.foundry_live:
+                parser.error("--adversarial-proof requires --foundry-live.")
             payload = json.loads(args.payload) if args.payload else {"text": args.text or ""}
-            generator = GPT56Generator(model=args.model) if args.foundry_live else OfflineTemplateGenerator() if args.offline_foundry else None
+            generator = _selected_live_generator(args) if args.foundry_live else OfflineTemplateGenerator() if args.offline_foundry else None
             foundry = CapabilityFoundry(registry_path, project_id=args.project, generator=generator)
             print(json.dumps(foundry.run(args.foundry_task, payload, approval_policy=args.approval_policy, adversarial_proof=args.adversarial_proof or args.offline_adversarial_proof), indent=2))
         except (json.JSONDecodeError, GeneratorError, RuntimeError) as exc:
@@ -124,7 +139,7 @@ def main() -> None:
     if args.forge and args.payload:
         try:
             payload = json.loads(args.payload)
-            live_agent = ForgeAgent(registry, generator=GPT56Generator(model=args.model))
+            live_agent = ForgeAgent(registry, generator=_selected_live_generator(args))
             print(json.dumps(live_agent.forge(args.forge, payload), indent=2))
         except (json.JSONDecodeError, GeneratorError, RuntimeError) as exc:
             parser.error(str(exc))
@@ -132,7 +147,7 @@ def main() -> None:
     if args.autonomous_task and args.payload:
         try:
             payload = json.loads(args.payload)
-            live_agent = ForgeAgent(registry, generator=GPT56Generator(model=args.model))
+            live_agent = ForgeAgent(registry, generator=_selected_live_generator(args))
             print(json.dumps(live_agent.execute_user_task(args.autonomous_task, payload), indent=2))
         except (json.JSONDecodeError, GeneratorError, RuntimeError) as exc:
             parser.error(str(exc))

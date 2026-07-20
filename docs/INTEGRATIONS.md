@@ -29,6 +29,27 @@ template, then remains pending until a reviewer approves it. Arbitrary new
 capabilities remain a live-model feature and are refused offline rather than
 being guessed.
 
+## Optional local Ollama generation
+
+The MCP/API control plane can use a local model instead of an API key. Start
+Ollama with a JSON-schema-capable model, then set the provider *before* you
+start the stdio server or local HTTP API:
+
+```bash
+ollama pull qwen2.5-coder:14b
+export FORGEAGENT_PROVIDER=ollama
+export FORGEAGENT_OLLAMA_MODEL=qwen2.5-coder:14b
+python3 main.py --mcp
+```
+
+`FORGEAGENT_PROVIDER` defaults to `offline`; valid explicit values are
+`offline`, `openai`, and `ollama`. In Ollama mode, `forge_request_capability`
+uses the local model for a new proposal, plan, semantic matching, and
+adversarial proof generation, then applies the unchanged policy, sandbox,
+proof, and approval pipeline. Use `FORGEAGENT_OLLAMA_HOST` only for an
+intentional non-default host; otherwise ForgeAgent targets loopback
+`http://127.0.0.1:11434`.
+
 ## Local stdio setup
 
 Use the included [`mcp.config.example.json`](../mcp.config.example.json) as the

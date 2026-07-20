@@ -47,7 +47,7 @@ All figures below were generated locally without an API key on July 20, 2026.
 
 | Evidence | Measured result | Source command |
 | --- | --- | --- |
-| Regression suite | 71 tests passed | `python3 -m unittest discover -s tests -v` |
+| Regression suite | 74 tests passed | `python3 -m unittest discover -s tests -v` |
 | Sandbox security regressions | 4/4 passed; import-alias, dunder-attribute, and dynamic-`getattr` escapes remain blocked | `python3 -m unittest tests.test_sandbox_security -v` |
 | Trust-gate benchmark | 8/8 cases passed; 7/7 attack patterns blocked | `python3 main.py --benchmark` |
 | Evaluation arena | 50/50 cases passed; 10/10 unsafe proposals rejected | `python3 main.py --evaluate` |
@@ -113,8 +113,9 @@ The Foundry Council makes that lifecycle explicit:
 
 The local-first control plane uses SQLite for project namespaces, trust scores,
 proof reports, approval decisions, audit receipts, and signed capability
-packages. An optional live generator uses `gpt-5.6-terra`; the complete
-offline lifecycle remains runnable without an API key.
+packages. Live generation is provider-explicit: use OpenAI `gpt-5.6-terra` or
+local Ollama; the complete offline lifecycle remains runnable without an API
+key.
 
 ## Why it matters
 
@@ -336,8 +337,8 @@ promoted. Verified replacement versions retain the older version for rollback.
 and twice with ForgeAgent's persistent memory, reporting new-skill creation,
 reuse, and elapsed time.
 
-With an OpenAI API key, ForgeAgent can also receive an unknown user task and
-ask GPT-5.6 to produce the dependency plan itself:
+With a selected live provider, ForgeAgent can also receive an unknown user task
+and produce the dependency plan itself:
 
 ```bash
 python3 main.py --autonomous-task "Redact this incident, assess its customer risk, and summarize recurring terms" \
@@ -348,7 +349,9 @@ For each planned step, a missing capability triggers code-and-test generation;
 a failed candidate triggers repair attempts; an accepted repair creates a new
 version while preserving the earlier trusted version for rollback.
 
-## Live GPT-5.6 forge
+## Live generation: GPT-5.6 or local Ollama
+
+### OpenAI GPT-5.6
 
 Set an OpenAI API key, then ask ForgeAgent for a genuinely new capability:
 
@@ -362,6 +365,39 @@ ForgeAgent asks GPT-5.6 to return a constrained `run(payload)` function plus
 edge-case tests. It performs AST policy checks and runs every test in a fresh,
 timeout-bounded subprocess. Only a passing candidate is stored in
 `data/tool_registry.json` and becomes reusable.
+
+### Ollama (local, no API key)
+
+Ollama is a first-class, explicit live provider. Install and start Ollama, pull
+a local model, then select it with `--provider ollama`. ForgeAgent sends the
+same JSON-schema contracts for proposing code, planning tasks, semantic
+matching, and adversarial proof; it does **not** bypass policy, sandbox, proof,
+approval, or audit boundaries.
+
+```bash
+# Example model choice; use any locally installed Ollama model that can follow JSON schemas.
+ollama pull qwen2.5-coder:14b
+
+python3 main.py --foundry-task "Extract order IDs in ORD-<digits> format" \
+  --payload '{"text":"Orders: ORD-12 and ORD-99"}' \
+  --foundry-live --provider ollama --ollama-model qwen2.5-coder:14b \
+  --adversarial-proof
+```
+
+For local MCP/API capability requests, set the provider before starting the
+server. The default remains `offline`; ForgeAgent never silently switches a
+model provider.
+
+```bash
+export FORGEAGENT_PROVIDER=ollama
+export FORGEAGENT_OLLAMA_MODEL=qwen2.5-coder:14b
+python3 main.py --mcp
+```
+
+By default, Ollama is contacted only at `http://127.0.0.1:11434`. Set
+`FORGEAGENT_OLLAMA_HOST` or `--ollama-host` only when you intentionally run an
+Ollama service elsewhere. A missing server or model fails clearly; it never
+pretends that a local model completed a capability run.
 
 ## Test
 
@@ -527,6 +563,7 @@ policy/test rejection.
 - Supported platform: macOS, Linux, or Windows with Python 3.10+.
 - Dependencies: none beyond the Python standard library.
 - Offline proof: `python3 main.py --demo --reset`.
-- Live GPT-5.6 proof: set `OPENAI_API_KEY` and use `--forge` as above.
+- Live-provider proof: set `OPENAI_API_KEY` for GPT-5.6, or run Ollama locally
+  and use `--provider ollama` as above.
 - Visual inspection: `python3 main.py --serve`.
 - Verification snapshot: `python3 -m unittest discover -s tests -v`.

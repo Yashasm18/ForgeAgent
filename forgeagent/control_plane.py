@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import secrets
 import sqlite3
 import time
@@ -17,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from forgeagent.foundry import CapabilityFoundry
+from forgeagent.generator import create_live_generator
 from forgeagent.offline_intelligence import OfflineTemplateGenerator
 from forgeagent.platform_store import PlatformStore
 
@@ -121,7 +123,7 @@ class ControlPlane:
             self.root / "tool_registry.json",
             project_id=project_id,
             root=".",
-            generator=OfflineTemplateGenerator(),
+            generator=self._request_generator(),
         )
         try:
             outcome = foundry.run(task, payload, approval_policy="production" if production else "review")
@@ -171,6 +173,21 @@ class ControlPlane:
     @staticmethod
     def _hash(token: str) -> str:
         return hashlib.sha256(token.encode()).hexdigest()
+
+    @staticmethod
+    def _request_generator():
+        """Select the configured MCP/API provider, preserving offline by default."""
+        provider = os.environ.get("FORGEAGENT_PROVIDER", "offline").strip().lower()
+        if provider == "offline":
+            return OfflineTemplateGenerator()
+        if provider in {"openai", "ollama"}:
+            return create_live_generator(
+                provider,
+                openai_model=os.environ.get("FORGEAGENT_OPENAI_MODEL", "gpt-5.6-terra"),
+                ollama_model=os.environ.get("FORGEAGENT_OLLAMA_MODEL"),
+                ollama_host=os.environ.get("FORGEAGENT_OLLAMA_HOST") or os.environ.get("OLLAMA_HOST"),
+            )
+        raise ValueError("FORGEAGENT_PROVIDER must be offline, openai, or ollama")
 
     @staticmethod
     def _require_text(value: str, label: str) -> None:
