@@ -18,6 +18,7 @@ from forgeagent.foundry import CapabilityFoundry
 from forgeagent.generator import GeneratorError, create_live_generator
 from forgeagent.mcp_server import main as mcp_main
 from forgeagent.offline_intelligence import OfflineTemplateGenerator
+from forgeagent.platform_store import PlatformStore
 from forgeagent.repository_graph import RepositoryGraph
 from forgeagent.registry import ToolRegistry
 from forgeagent.workflows import INCIDENT_RECOVERY_PLAN
@@ -52,6 +53,7 @@ def main() -> None:
     parser.add_argument("--offline-adversarial-proof", action="store_true", help="Use deterministic adversarial cases registered for an offline template (requires --offline-foundry)")
     parser.add_argument("--repo-graph", action="store_true", help="Export the repository intelligence graph")
     parser.add_argument("--evaluate", action="store_true", help="Run the 50-case Foundry Evaluation Arena")
+    parser.add_argument("--contract-drift", action="store_true", help="Replay persisted proof contracts for trusted capabilities and quarantine failures")
     parser.add_argument("--mcp", action="store_true", help="Run ForgeAgent's stdio MCP server")
     parser.add_argument("--api", action="store_true", help="Run the local authenticated ForgeAgent control-plane HTTP API")
     parser.add_argument("--api-port", type=int, default=8090, help="Control-plane API port (default: 8090)")
@@ -92,6 +94,13 @@ def main() -> None:
         return
     if args.evaluate:
         print(json.dumps(run_evaluation_suite(), indent=2))
+        return
+    if args.contract_drift:
+        store = PlatformStore(registry_path.parent / "foundry.sqlite3")
+        try:
+            print(json.dumps(store.check_contract_drift(args.project), indent=2))
+        finally:
+            store.close()
         return
     if args.repo_graph:
         graph = RepositoryGraph(".")

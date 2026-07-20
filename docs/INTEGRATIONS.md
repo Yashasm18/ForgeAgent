@@ -17,6 +17,8 @@ receipts.
 | `forge_get_approval_status` | Retrieve state plus an integrity-hashed audit receipt. |
 | `forge_decide_capability` | Record a human approval or rejection with a named reason. |
 | `forge_get_metrics` | Inspect capability state and control-plane activity without raw payloads. |
+| `forge_report_capability_feedback` | Reproduce a correct/incorrect developer outcome; a verified mismatch is retained as a regression and quarantines trusted reuse. |
+| `forge_check_contract_drift` | Replay stored contract and feedback cases for trusted versions; failures are quarantined, never reused silently. |
 
 `forge_request_capability` defaults to production policy. It therefore keeps a
 candidate **pending** rather than silently promoting or reusing it. This is by
@@ -146,8 +148,35 @@ curl -X POST http://127.0.0.1:8090/v1/projects/team/invoices/capability-requests
 
 Roles are `viewer`, `developer`, `reviewer`, `admin`, and `owner`. Capability
 requests require `developer`; approvals require `reviewer`; role assignment
-requires `admin`. API tokens are stored only as SHA-256 hashes and receive an
-expiry by default.
+requires `admin`. Feedback requires `developer`; drift checks require
+`reviewer`. API tokens are stored only as SHA-256 hashes and receive an expiry
+by default.
+
+Reproducible feedback is an evidence path, not a rating button. Supply the
+actual JSON payload and expected JSON output. ForgeAgent reruns the trusted
+source in the sandbox; only a mismatch is stored as a regression and
+quarantines the capability. A reviewer can replay retained evidence later with
+`forge_check_contract_drift` or `python3 main.py --contract-drift --project <id>`.
+Feedback carrying detected emails, phone numbers, card-like values, or labelled
+secrets is rejected before persistence; provide a redacted deterministic
+reproduction instead. Every `forge_run_trusted_capability` reuse also runs the
+same retained-evidence check first, so a detected failure is quarantined before
+that agent receives a result.
+
+```bash
+# A reproducible incorrect outcome is verified in the sandbox before it can
+# quarantine the capability and become future regression evidence.
+curl -X POST http://127.0.0.1:8090/v1/projects/team/invoices/capabilities/CAPABILITY_ID/feedback \
+  -H 'Authorization: Bearer fga_replace_me' \
+  -H 'Content-Type: application/json' \
+  -d '{"verdict":"incorrect","summary":"Primary-ID contract was violated.","payload":{"text":"INV-2048 and INV-9"},"expected_output":["INV-2048"]}'
+
+# A reviewer can replay every stored proof contract for this namespace.
+curl -X POST http://127.0.0.1:8090/v1/projects/team/invoices/contract-drift \
+  -H 'Authorization: Bearer fga_replace_me' \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
 
 ## Remote deployment boundary
 

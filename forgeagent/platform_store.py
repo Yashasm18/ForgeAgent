@@ -12,7 +12,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from forgeagent.governance import assess, validate_human_decision
+from forgeagent.generator import ProofCase
+from forgeagent.incident_analysis import analyze_incident
 from forgeagent.policy_config import load_policy
+from forgeagent.proof_engine import ProofEngine
+from forgeagent.sandbox import SandboxError, execute
 
 
 PACKAGE_SCHEMA_VERSION = 2
@@ -55,6 +59,21 @@ CREATE TABLE IF NOT EXISTS capability_requests (
 CREATE TABLE IF NOT EXISTS threat_models (
   capability_id TEXT PRIMARY KEY, threat_json TEXT NOT NULL, created_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS capability_feedback (
+  id INTEGER PRIMARY KEY, capability_id TEXT NOT NULL, reporter TEXT NOT NULL,
+  verdict TEXT NOT NULL, summary TEXT NOT NULL, payload_json TEXT NOT NULL,
+  expected_output_json TEXT NOT NULL, execution_json TEXT NOT NULL,
+  status TEXT NOT NULL, created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS regression_cases (
+  id INTEGER PRIMARY KEY, capability_id TEXT NOT NULL, input_json TEXT NOT NULL,
+  expected_output_json TEXT NOT NULL, rationale TEXT NOT NULL, source_feedback_id INTEGER,
+  created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS drift_runs (
+  id INTEGER PRIMARY KEY, capability_id TEXT NOT NULL, result_json TEXT NOT NULL,
+  state TEXT NOT NULL, created_at REAL NOT NULL
+);
 """
 
 @dataclass(frozen=True)
@@ -87,6 +106,7 @@ class PlatformStore:
         if not project_id.strip() or not name.strip():
             raise ValueError("project_id and capability name are required")
         now = time.time()
+        proof = self._replay_prior_feedback_regressions(project_id, name, source, proof)
         self.db.execute("INSERT OR IGNORE INTO projects VALUES (?, ?)", (project_id, now))
         version = self.db.execute("SELECT COALESCE(MAX(version), 0) + 1 FROM capabilities WHERE project_id = ? AND name = ?", (project_id, name)).fetchone()[0]
         capability_id = hashlib.sha256(f"{project_id}:{name}:{version}:{source}".encode()).hexdigest()[:20]
@@ -105,6 +125,145 @@ class PlatformStore:
         self._event(project_id, "capability_proposed", f"{name}@v{version}:{state}")
         self.db.commit()
         return self.get(capability_id)
+
+    def record_feedback(
+        self,
+        capability_id: str,
+        reporter: str,
+        verdict: str,
+        summary: str,
+        payload: object,
+        expected_output: object,
+    ) -> dict[str, object]:
+        """Record outcome feedback and fail closed when a bug is reproduced.
+
+        Incorrect feedback is not treated as a vote. ForgeAgent executes the
+        existing trusted source against the supplied JSON contract. Only a
+        reproducible mismatch becomes a regression case and automatically
+        removes the capability from trusted reuse by quarantining it.
+        """
+        if verdict not in {"correct", "incorrect"}:
+            raise ValueError("feedback verdict must be correct or incorrect")
+        validate_human_decision(reporter, summary)
+        self._json_value(payload, "feedback payload")
+        self._json_value(expected_output, "expected output")
+        sensitive = analyze_incident(json.dumps({"payload": payload, "expected_output": expected_output}, sort_keys=True))
+        if sensitive.redaction_categories:
+            categories = ", ".join(sensitive.redaction_categories)
+            raise ValueError(f"feedback contains {categories}; submit a redacted reproduction instead")
+        record = self.get(capability_id)
+        execution: dict[str, object]
+        mismatch = False
+        try:
+            actual = execute(record.source, payload)
+            self._json_value(actual, "capability output")
+            mismatch = verdict == "incorrect" and actual != expected_output
+            execution = {"actual_output": actual, "error": None}
+        except (SandboxError, TypeError, ValueError) as exc:
+            mismatch = verdict == "incorrect"
+            execution = {"actual_output": None, "error": str(exc)}
+
+        status = "reproduced_mismatch" if mismatch else "not_reproduced"
+        now = time.time()
+        cursor = self.db.execute(
+            "INSERT INTO capability_feedback(capability_id,reporter,verdict,summary,payload_json,expected_output_json,execution_json,status,created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (
+                capability_id, reporter, verdict, summary, json.dumps(payload, sort_keys=True),
+                json.dumps(expected_output, sort_keys=True), json.dumps(execution, sort_keys=True), status, now,
+            ),
+        )
+        feedback_id = int(cursor.lastrowid)
+        if mismatch:
+            rationale = f"Reproduced user feedback #{feedback_id}: {summary}"
+            self.db.execute(
+                "INSERT INTO regression_cases(capability_id,input_json,expected_output_json,rationale,source_feedback_id,created_at) VALUES (?,?,?,?,?,?)",
+                (capability_id, json.dumps(payload, sort_keys=True), json.dumps(expected_output, sort_keys=True), rationale, feedback_id, now),
+            )
+            if record.state == "trusted":
+                self.db.execute("UPDATE capabilities SET state = ?, trust_score = 0 WHERE id = ?", ("quarantined", capability_id))
+                self._event(record.project_id, "feedback_regression_quarantined", f"{record.name}@v{record.version}:feedback#{feedback_id}")
+            else:
+                self._event(record.project_id, "feedback_regression_recorded", f"{record.name}@v{record.version}:feedback#{feedback_id}")
+        else:
+            self._event(record.project_id, "feedback_recorded", f"{record.name}@v{record.version}:{status}")
+        self.db.commit()
+        return {
+            "id": feedback_id,
+            "capability_id": capability_id,
+            "status": status,
+            "quarantined": mismatch and record.state == "trusted",
+            "execution": execution,
+        }
+
+    def regression_cases(self, capability_id: str) -> list[dict[str, object]]:
+        """Return replayable feedback regressions in insertion order."""
+        rows = self.db.execute(
+            "SELECT id,input_json,expected_output_json,rationale,source_feedback_id,created_at "
+            "FROM regression_cases WHERE capability_id = ? ORDER BY id",
+            (capability_id,),
+        )
+        return [
+            {
+                "id": int(row["id"]),
+                "input": json.loads(row["input_json"]),
+                "expected_output": json.loads(row["expected_output_json"]),
+                "rationale": str(row["rationale"]),
+                "source_feedback_id": row["source_feedback_id"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
+    def check_contract_drift(self, project_id: str, capability_id: str | None = None) -> dict[str, object]:
+        """Replay persisted contract evidence and quarantine failing trusted code.
+
+        A missing legacy case list is intentionally *not* a pass. It remains
+        trusted with an explicit evidence-unavailable result until re-proved.
+        """
+        if capability_id is not None:
+            candidate = self.get(capability_id)
+            if candidate.project_id != project_id:
+                raise ValueError("capability is outside this project namespace")
+            records = [candidate] if candidate.state == "trusted" else []
+        else:
+            records = self.list(project_id, trusted_only=True)
+
+        checks: list[dict[str, object]] = []
+        passed = quarantined = unavailable = 0
+        for record in records:
+            stored_cases = self._proof_cases(record.id)
+            feedback_cases = [
+                ProofCase("feedback", item["input"], item["expected_output"], str(item["rationale"]))
+                for item in self.regression_cases(record.id)
+            ]
+            if not stored_cases:
+                unavailable += 1
+                checks.append({"capability_id": record.id, "name": record.name, "state": record.state, "status": "evidence_unavailable"})
+                self._event(project_id, "contract_drift_evidence_unavailable", f"{record.name}@v{record.version}")
+                continue
+
+            report = ProofEngine().replay(record.source, [*stored_cases, *feedback_cases])
+            now = time.time()
+            if report["passed"]:
+                passed += 1
+                state, status = record.state, "passed"
+                self._event(project_id, "contract_drift_passed", f"{record.name}@v{record.version}")
+            else:
+                quarantined += 1
+                state, status = "quarantined", "failed"
+                self.db.execute("UPDATE capabilities SET state = ?, trust_score = 0 WHERE id = ?", (state, record.id))
+                self._event(project_id, "contract_drift_quarantined", f"{record.name}@v{record.version}")
+            self.db.execute(
+                "INSERT INTO drift_runs(capability_id,result_json,state,created_at) VALUES (?,?,?,?)",
+                (record.id, json.dumps(report, sort_keys=True), state, now),
+            )
+            checks.append({"capability_id": record.id, "name": record.name, "state": state, "status": status, "report": report})
+        self.db.commit()
+        return {"project_id": project_id, "checked": len(checks), "passed": passed, "quarantined": quarantined, "unavailable": unavailable, "checks": checks}
+
+    def events(self, project_id: str) -> list[dict[str, object]]:
+        return [dict(row) for row in self.db.execute("SELECT kind,detail,created_at FROM events WHERE project_id = ? ORDER BY id", (project_id,))]
 
     def decide(self, capability_id: str, decision: str, reviewer: str, reason: str) -> CapabilityRecord:
         if decision not in {"approved", "rejected"}:
@@ -267,6 +426,90 @@ class PlatformStore:
             raise ValueError("invalid package signature")
         source = payload["capability"]
         return self.promote(target_project, str(source["name"]), str(source["source"]), f"marketplace import; {source['provenance']}", dict(payload.get("proof", {})), policy="review")
+
+    def _proof_cases(self, capability_id: str) -> list[ProofCase]:
+        row = self.db.execute(
+            "SELECT result_json FROM proofs WHERE capability_id = ? ORDER BY id DESC LIMIT 1",
+            (capability_id,),
+        ).fetchone()
+        if row is None:
+            return []
+        try:
+            proof = json.loads(row["result_json"])
+            cases = proof.get("cases", [])
+            if not isinstance(cases, list):
+                return []
+            parsed = [
+                ProofCase(
+                    str(case["category"]), case["input"], case["expected_output"], str(case["rationale"]),
+                )
+                for case in cases
+                if isinstance(case, dict)
+            ]
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return []
+        return parsed if len(parsed) == len(cases) else []
+
+    def _replay_prior_feedback_regressions(
+        self,
+        project_id: str,
+        name: str,
+        source: str,
+        proof: dict[str, object],
+    ) -> dict[str, object]:
+        """Require a successor version to satisfy all reproduced feedback.
+
+        Feedback belongs to the capability lineage, not a single discarded
+        version. A repaired v2 therefore earns trust only after the recorded
+        v1 regression inputs also pass in the same sandbox boundary.
+        """
+        inherited = self.db.execute(
+            "SELECT r.input_json,r.expected_output_json,r.rationale FROM regression_cases r "
+            "JOIN capabilities c ON c.id = r.capability_id "
+            "WHERE c.project_id = ? AND c.name = ? ORDER BY r.id",
+            (project_id, name),
+        ).fetchall()
+        if not inherited:
+            return proof
+        cases = [
+            ProofCase("feedback", json.loads(row["input_json"]), json.loads(row["expected_output_json"]), str(row["rationale"]))
+            for row in inherited
+        ]
+        replay = ProofEngine().replay(source, cases, require_coverage=False)
+        merged = json.loads(json.dumps(proof))
+        original_cases = merged.get("cases")
+        if not isinstance(original_cases, list):
+            original_cases = []
+        original_cases.extend({
+            "category": case.category,
+            "input": case.input,
+            "expected_output": case.expected_output,
+            "rationale": case.rationale,
+        } for case in cases)
+        merged["cases"] = original_cases
+        original_results = merged.get("results")
+        if not isinstance(original_results, list):
+            original_results = []
+        original_results.extend(result for result in replay["results"] if result["category"] != "policy")
+        if any(not result["passed"] and result["category"] == "policy" for result in replay["results"]):
+            original_results.extend(result for result in replay["results"] if result["category"] == "policy")
+        merged["results"] = original_results
+        coverage = merged.get("coverage")
+        merged["coverage"] = sorted({*(coverage if isinstance(coverage, list) else []), "feedback"})
+        merged["passed"] = bool(merged.get("passed")) and bool(replay["passed"])
+        merged["failure_count"] = sum(
+            isinstance(result, dict) and result.get("passed") is False for result in original_results
+        )
+        if not merged["passed"]:
+            merged["trust_score"] = 0
+        return merged
+
+    @staticmethod
+    def _json_value(value: object, label: str) -> None:
+        try:
+            json.dumps(value, sort_keys=True)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{label} must be JSON-compatible") from exc
 
     def _event(self, project_id: str, kind: str, detail: str) -> None:
         self.db.execute("INSERT INTO events(project_id,kind,detail,created_at) VALUES (?, ?, ?, ?)", (project_id, kind, detail, time.time()))

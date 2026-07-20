@@ -72,6 +72,64 @@ class ControlPlaneApiServerTests(unittest.TestCase):
                 process.terminate()
                 process.wait(timeout=5)
 
+    def test_api_feedback_quarantines_a_reproduced_contract_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            port = self._free_port()
+            main = Path(__file__).resolve().parents[1] / "main.py"
+            process = subprocess.Popen(
+                [sys.executable, str(main), "--api", "--api-port", str(port)],
+                cwd=root,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            base = f"http://127.0.0.1:{port}"
+            try:
+                for _ in range(30):
+                    try:
+                        if self._json_request(f"{base}/healthz")[0] == 200:
+                            break
+                    except OSError:
+                        time.sleep(0.1)
+                else:
+                    self.fail("control-plane API did not become healthy")
+
+                _, created = self._json_request(
+                    f"{base}/v1/projects", method="POST",
+                    payload={"project_id": "judge/maintenance", "owner": "judge"},
+                )
+                token = str(created["bootstrap_token"])
+                _, requested = self._json_request(
+                    f"{base}/v1/projects/judge/maintenance/capability-requests",
+                    method="POST",
+                    token=token,
+                    payload={"task": "Extract invoice IDs from billing logs", "payload": {"text": "INV-2048"}},
+                )
+                capability_id = str(requested["memory_record"]["id"])
+                self._json_request(
+                    f"{base}/v1/projects/judge/maintenance/capabilities/{capability_id}:decision",
+                    method="POST", token=token,
+                    payload={"decision": "approved", "reason": "Reviewed deterministic proof evidence and source."},
+                )
+                _, feedback = self._json_request(
+                    f"{base}/v1/projects/judge/maintenance/capabilities/{capability_id}/feedback",
+                    method="POST", token=token,
+                    payload={
+                        "verdict": "incorrect",
+                        "summary": "Downstream contract requires only the primary invoice identifier.",
+                        "payload": {"text": "INV-2048 and INV-9"},
+                        "expected_output": ["INV-2048"],
+                    },
+                )
+                self.assertTrue(feedback["quarantined"])
+                _, snapshot = self._json_request(
+                    f"{base}/v1/projects/judge/maintenance/snapshot", token=token,
+                )
+                self.assertEqual(snapshot["receipt"]["capabilities"][0]["state"], "quarantined")
+            finally:
+                process.terminate()
+                process.wait(timeout=5)
+
 
 if __name__ == "__main__":
     unittest.main()

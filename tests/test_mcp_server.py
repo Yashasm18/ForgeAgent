@@ -121,6 +121,36 @@ class McpTests(unittest.TestCase):
                 self.assertEqual(reused["status"], "reused")
                 self.assertEqual(reused["result"], ["INV-2048", "INV-9"])
                 self.assertEqual(reused["memory_source"], "platform_store")
+                self.assertEqual(reused["drift_check"]["status"], "passed")
+            finally:
+                plane.close()
+
+    def test_mcp_feedback_quarantines_reproduced_bug_before_another_agent_can_reuse_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plane = ControlPlane(Path(directory) / "control")
+            try:
+                request = call("forge_request_capability", {
+                    "project_id": "maintenance", "task": "Extract invoice IDs from billing logs",
+                    "payload": {"text": "INV-2048"}, "production": True,
+                }, plane.store, plane)
+                capability_id = request["memory_record"]["id"]
+                call("forge_decide_capability", {
+                    "capability_id": capability_id, "decision": "approved", "reviewer": "Ada",
+                    "reason": "Reviewed deterministic template and proof evidence.",
+                }, plane.store, plane)
+
+                feedback = call("forge_report_capability_feedback", {
+                    "project_id": "maintenance", "capability_id": capability_id,
+                    "verdict": "incorrect", "summary": "Downstream contract requires only the primary identifier from this ticket.",
+                    "payload": {"text": "INV-2048 and INV-9"}, "expected_output": ["INV-2048"],
+                }, plane.store, plane)
+
+                self.assertTrue(feedback["quarantined"])
+                with self.assertRaisesRegex(ValueError, "No approved trusted capability"):
+                    call("forge_run_trusted_capability", {
+                        "project_id": "maintenance", "task": "Extract invoice IDs from billing logs",
+                        "payload": {"text": "INV-2048"},
+                    }, plane.store, plane)
             finally:
                 plane.close()
 
@@ -161,6 +191,7 @@ class McpTests(unittest.TestCase):
         expected = {
             "forge_list_capabilities", "forge_get_audit_receipt", "forge_request_capability",
             "forge_run_trusted_capability", "forge_get_approval_status", "forge_get_metrics",
+            "forge_report_capability_feedback", "forge_check_contract_drift",
         }
         self.assertEqual(PROJECT_SCOPED_TOOLS, expected)
         dispatch = inspect.getsource(mcp_server.call)

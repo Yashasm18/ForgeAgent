@@ -49,9 +49,25 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
                 return self._send(HTTPStatus.CREATED, self.plane.request_capability(project_id, subject, str(body["task"]), dict(body.get("payload", {})), bool(body.get("production", True))))
             if project_id := self._project_for_suffix("/members"):
                 return self._send(HTTPStatus.CREATED, self.plane.grant_role(project_id, subject, str(body["subject"]), str(body["role"])).__dict__)
+            if project_id := self._project_for_suffix("/contract-drift"):
+                return self._send(HTTPStatus.OK, self.plane.check_contract_drift(project_id, subject))
             if decision_route := self._capability_decision_route():
                 project_id, capability_id = decision_route
                 return self._send(HTTPStatus.OK, self.plane.decide_capability(project_id, subject, capability_id, str(body["decision"]), str(body["reason"])))
+            if feedback_route := self._capability_feedback_route():
+                project_id, capability_id = feedback_route
+                return self._send(
+                    HTTPStatus.OK,
+                    self.plane.report_capability_feedback(
+                        project_id,
+                        subject,
+                        capability_id,
+                        str(body["verdict"]),
+                        str(body["summary"]),
+                        body["payload"],
+                        body["expected_output"],
+                    ),
+                )
             return self._send(HTTPStatus.NOT_FOUND, {"error": "route not found"})
         except (AuthorizationError, PermissionError) as exc:
             self._send(HTTPStatus.FORBIDDEN, {"error": str(exc)})
@@ -87,9 +103,14 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
         return unquote(project_id) if project_id else None
 
     def _capability_decision_route(self) -> tuple[str, str] | None:
+        return self._capability_route(":decision")
+
+    def _capability_feedback_route(self) -> tuple[str, str] | None:
+        return self._capability_route("/feedback")
+
+    def _capability_route(self, suffix: str) -> tuple[str, str] | None:
         prefix = "/v1/projects/"
         marker = "/capabilities/"
-        suffix = ":decision"
         path = self.path.rstrip("/")
         if not path.startswith(prefix) or not path.endswith(suffix):
             return None

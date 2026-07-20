@@ -69,3 +69,35 @@ class ControlPlaneTests(unittest.TestCase):
                 self.assertTrue(outcome["proof"]["passed"])
             finally:
                 plane.close()
+
+    def test_developer_feedback_quarantines_a_reproduced_failure_and_reviewer_can_run_drift_check(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plane = ControlPlane(directory)
+            try:
+                plane.create_project("team/maintenance", "owner")
+                plane.grant_role("team/maintenance", "owner", "developer", "developer")
+                plane.grant_role("team/maintenance", "owner", "reviewer", "reviewer")
+                record = plane.store.promote(
+                    "team/maintenance", "echo", "def run(payload):\n    return payload['value']\n", "fixture",
+                    {
+                        "passed": True, "trust_score": 100,
+                        "cases": [
+                            {"category": "normal", "input": {"value": "ok"}, "expected_output": "ok", "rationale": "normal"},
+                            {"category": "edge", "input": {"value": "ok"}, "expected_output": "ok", "rationale": "edge"},
+                            {"category": "contract", "input": {"value": "ok"}, "expected_output": "ok", "rationale": "contract"},
+                        ],
+                    },
+                )
+
+                feedback = plane.report_capability_feedback(
+                    "team/maintenance", "developer", record.id, "incorrect",
+                    "The echo tool must return a list for batch input.",
+                    {"value": "ok"}, ["ok"],
+                )
+                drift = plane.check_contract_drift("team/maintenance", "reviewer")
+
+                self.assertTrue(feedback["quarantined"])
+                self.assertEqual(plane.store.get(record.id).state, "quarantined")
+                self.assertEqual(drift["checked"], 0)
+            finally:
+                plane.close()

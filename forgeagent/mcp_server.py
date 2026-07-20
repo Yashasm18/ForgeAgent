@@ -32,6 +32,8 @@ PROJECT_SCOPED_TOOLS = frozenset({
     "forge_run_trusted_capability",
     "forge_get_approval_status",
     "forge_get_metrics",
+    "forge_report_capability_feedback",
+    "forge_check_contract_drift",
 })
 
 
@@ -46,6 +48,8 @@ def tools() -> list[dict[str, object]]:
         {"name": "forge_run_trusted_capability", "description": "Run or reuse an existing trusted capability locally; it never creates unrestricted external actions.", "inputSchema": {"type": "object", "properties": {"project_id": project, "task": {"type": "string"}, "payload": {"type": "object"}}, "required": ["project_id", "task", "payload"]}},
         {"name": "forge_get_approval_status", "description": "Return pending/trusted/rejected capability states and an integrity-hashed audit receipt.", "inputSchema": {"type": "object", "properties": {"project_id": project}, "required": ["project_id"]}},
         {"name": "forge_get_metrics", "description": "Return audit-safe capability, state, and control-plane activity metrics for a project.", "inputSchema": {"type": "object", "properties": {"project_id": project}, "required": ["project_id"]}},
+        {"name": "forge_report_capability_feedback", "description": "Submit a reproducible correct/incorrect outcome. A reproduced incorrect result becomes a regression case and safely quarantines trusted reuse.", "inputSchema": {"type": "object", "properties": {"project_id": project, "capability_id": {"type": "string"}, "verdict": {"type": "string", "enum": ["correct", "incorrect"]}, "summary": {"type": "string"}, "payload": {"type": "object"}, "expected_output": {}}, "required": ["project_id", "capability_id", "verdict", "summary", "payload", "expected_output"]}},
+        {"name": "forge_check_contract_drift", "description": "Replay persisted proof and feedback regressions for trusted capabilities; failures are quarantined, never silently reused.", "inputSchema": {"type": "object", "properties": {"project_id": project}, "required": ["project_id"]}},
     ]
 
 
@@ -70,6 +74,18 @@ def _run_project_trusted_capability(store: PlatformStore, project_id: str, task:
     record = next((item for item in store.list(project_id, trusted_only=True) if item.name == capability), None)
     if record is None:
         return None
+    # Reuse is also a maintenance checkpoint. A trusted record with retained
+    # evidence is re-proved before it executes for another coding agent; a
+    # mismatch quarantines it and blocks this run rather than deferring the
+    # problem to a later periodic sweep.
+    drift = store.check_contract_drift(project_id, record.id)
+    check = drift["checks"][0] if drift["checks"] else None
+    if not isinstance(check, dict) or check.get("status") != "passed":
+        status = check.get("status", "unavailable") if isinstance(check, dict) else "unavailable"
+        raise ValueError(
+            f"Trusted capability cannot be reused: contract evidence is {status}. "
+            "Re-prove or repair it before reuse."
+        )
     result = execute(record.source, payload)
     exported = asdict(record)
     return {
@@ -87,6 +103,7 @@ def _run_project_trusted_capability(store: PlatformStore, project_id: str, task:
         "proof": None,
         "memory_record": exported,
         "memory_source": "platform_store",
+        "drift_check": check,
     }
 
 
@@ -123,6 +140,28 @@ def call(name: str, arguments: dict[str, Any], store: PlatformStore, plane: Cont
         project_id = str(arguments["project_id"])
         local_plane.create_project(project_id, "local-mcp")
         return local_plane.metrics(project_id, "local-mcp")
+    if name == "forge_report_capability_feedback":
+        local_plane = plane or ControlPlane("data")
+        project_id = str(arguments["project_id"])
+        local_plane.create_project(project_id, "local-mcp")
+        return local_plane.report_capability_feedback(
+            project_id,
+            "local-mcp",
+            str(arguments["capability_id"]),
+            str(arguments["verdict"]),
+            str(arguments["summary"]),
+            arguments["payload"],
+            arguments["expected_output"],
+        )
+    if name == "forge_check_contract_drift":
+        local_plane = plane or ControlPlane("data")
+        project_id = str(arguments["project_id"])
+        local_plane.create_project(project_id, "local-mcp")
+        # Local stdio MCP is a developer-owned session. The bootstrap principal
+        # is also used for review-only maintenance commands; remote API callers
+        # must satisfy the explicit RBAC boundary in ControlPlane.
+        local_plane.grant_role(project_id, "local-mcp", "local-mcp", "reviewer")
+        return local_plane.check_contract_drift(project_id, "local-mcp")
     raise ValueError(f"unknown tool: {name}")
 
 

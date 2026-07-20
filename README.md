@@ -47,7 +47,7 @@ All figures below were generated locally without an API key on July 20, 2026.
 
 | Evidence | Measured result | Source command |
 | --- | --- | --- |
-| Regression suite | 75 tests passed | `python3 -m unittest discover -s tests -v` |
+| Regression suite | 83 tests passed | `python3 -m unittest discover -s tests -v` |
 | Sandbox security regressions | 4/4 passed; import-alias, dunder-attribute, and dynamic-`getattr` escapes remain blocked | `python3 -m unittest tests.test_sandbox_security -v` |
 | Trust-gate benchmark | 8/8 cases passed; 7/7 attack patterns blocked | `python3 main.py --benchmark` |
 | Evaluation arena | 50/50 cases passed; 10/10 unsafe proposals rejected | `python3 main.py --evaluate` |
@@ -87,6 +87,7 @@ The first command forges curated offline capabilities after proof; the second de
 | Structured outputs | The three live GPT-5.6 calls enforce JSON Schemas through the Responses API before parsing. | [`forgeagent/generator.py`](forgeagent/generator.py) |
 | Live Foundry Council | The dashboard polls newly appended council decisions from the SQLite + JSONL audit trail while a Foundry run is active. | [`forgeagent/dashboard.py`](forgeagent/dashboard.py), [`forgeagent/audit.py`](forgeagent/audit.py), `python3 main.py --serve` |
 | Accurate proof evidence | Capability records persist the actual passing proof-case count; the dashboard shows evidence unavailable rather than inventing a fallback value. | [`forgeagent/registry.py`](forgeagent/registry.py), [`forgeagent/dashboard.py`](forgeagent/dashboard.py) |
+| Contract drift and feedback regression | Replays persisted proof cases for trusted versions, quarantines a reproduced failure, and carries verified feedback regressions into successor versions before they can earn trust. | [`forgeagent/platform_store.py`](forgeagent/platform_store.py), `python3 main.py --contract-drift --project local/default` |
 | Reproducible evaluation | The benchmark chart is regenerated from the local benchmark, evaluation, and comparison commands. | [`scripts/generate_benchmark_chart.py`](scripts/generate_benchmark_chart.py) |
 | Production reference profile | An optional rootless, no-egress container profile and stricter approval policy are available for validation. | [`Dockerfile.sandbox`](Dockerfile.sandbox), [`compose.production.yml`](compose.production.yml) |
 
@@ -136,6 +137,9 @@ LLM-code cache would save source because it was generated. ForgeAgent instead:
   [`forgeagent/governance.py`](forgeagent/governance.py), rather than treating a passing string
   transform and an external action alike;
 - preserves version lineage and rollback rather than overwriting history; and
+- turns a reproducible incorrect developer outcome into a sandboxed regression
+  case, quarantining the broken version and requiring a repaired successor to
+  pass that case before it can be trusted again; and
 - routes a candidate replacement through the same policy-and-test path in
   [`forgeagent/agent.py`](forgeagent/agent.py) and [`forgeagent/foundry.py`](forgeagent/foundry.py) before
   `ToolRegistry.replace` can supersede a trusted version.
@@ -242,6 +246,7 @@ fully offline.
 | Evaluation evidence | `python3 main.py --evaluate` | Actual output across 50 deterministic cases. |
 | Repository intelligence | `python3 main.py --repo-graph` | Queryable code/docs graph export. |
 | Developer-tool mode | `python3 main.py --mcp` | MCP server over standard input/output. |
+| Contract maintenance | `python3 main.py --contract-drift --project local/default` | Replays retained proof cases; failures are quarantined, legacy evidence is explicitly unavailable. |
 | Browser demo | `python3 main.py --serve` | Local Forge Ledger dashboard. |
 
 ## Production isolation and approvals
@@ -497,8 +502,14 @@ is unavailable, ForgeAgent uses the unchanged hardcoded baseline.
 ## Control plane and coding-agent integration
 
 ForgeAgent now includes MCP v2 tools for requesting a capability, reusing a
-trusted one, checking approval state, and reading audit-safe metrics. It also
-ships a local authenticated control-plane API with project roles (`viewer`,
+trusted one, checking approval state, recording reproducible outcome feedback,
+and replaying contract-drift checks. A reproduced incorrect result is
+quarantined rather than silently reused; its regression case follows the
+capability lineage into repaired versions. Feedback reproductions containing
+detected PII or labelled secrets are rejected before persistence, so teams
+submit a redacted deterministic case instead. MCP reuse automatically replays
+retained contract evidence before executing a trusted capability. It also ships a local authenticated
+control-plane API with project roles (`viewer`,
 `developer`, `reviewer`, `admin`, `owner`) and expiring hashed bearer tokens.
 
 ```bash

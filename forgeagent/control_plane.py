@@ -146,6 +146,46 @@ class ControlPlane:
         self.db.commit()
         return asdict(updated)
 
+    def report_capability_feedback(
+        self,
+        project_id: str,
+        actor: str,
+        capability_id: str,
+        verdict: str,
+        summary: str,
+        payload: object,
+        expected_output: object,
+    ) -> dict[str, object]:
+        """Accept reproducible developer feedback within the project boundary."""
+        self.require(project_id, actor, "developer")
+        record = self.store.get(capability_id)
+        if record.project_id != project_id:
+            raise AuthorizationError("capability is outside this project namespace")
+        feedback = self.store.record_feedback(
+            capability_id, actor, verdict, summary, payload, expected_output,
+        )
+        self._event(project_id, actor, "capability_feedback", {
+            "capability_id": capability_id,
+            "verdict": verdict,
+            "status": feedback["status"],
+            "quarantined": feedback["quarantined"],
+        })
+        self.db.commit()
+        return feedback
+
+    def check_contract_drift(self, project_id: str, actor: str) -> dict[str, object]:
+        """Allow reviewers to replay stored contracts and apply safe holds."""
+        self.require(project_id, actor, "reviewer")
+        report = self.store.check_contract_drift(project_id)
+        self._event(project_id, actor, "contract_drift_checked", {
+            "checked": report["checked"],
+            "passed": report["passed"],
+            "quarantined": report["quarantined"],
+            "unavailable": report["unavailable"],
+        })
+        self.db.commit()
+        return report
+
     def project_snapshot(self, project_id: str, actor: str) -> dict[str, object]:
         self.require(project_id, actor, "viewer")
         receipt = self.store.receipt(project_id)
@@ -163,6 +203,7 @@ class ControlPlane:
             "capability_count": len(records),
             "states": states,
             "trusted_reuse_count": sum(record.trust_score > 0 and record.state == "trusted" for record in records),
+            "quarantined_count": states.get("quarantined", 0),
             "control_event_count": len(events),
             "last_event_at": events[-1]["created_at"] if events else None,
         }

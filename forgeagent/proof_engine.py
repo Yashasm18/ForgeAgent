@@ -26,35 +26,58 @@ class ProofEngine:
     OPTIONAL_CATEGORIES = ("adversarial",)
 
     def evaluate(self, proposal: ToolProposal, cases: Iterable[ProofCase] | None = None, adversarial_cases: Iterable[ProofCase] | None = None) -> dict[str, object]:
-        configured = load_policy()
-        findings = policy_violations(proposal.source, configured)
         proof_cases = list(cases or self._default_cases(proposal))
         supplied_adversarial = list(adversarial_cases or ())
         if any(case.category != "adversarial" for case in supplied_adversarial):
             raise ValueError("adversarial proof cases must use the adversarial category")
         proof_cases.extend(supplied_adversarial)
+        return self.replay(proposal.source, proof_cases)
+
+    def replay(self, source: str, cases: Iterable[ProofCase], require_coverage: bool = True) -> dict[str, object]:
+        """Re-run persisted proof cases against a trusted capability version.
+
+        This is the same static policy and isolated subprocess path used at
+        promotion time. It deliberately does not generate new tests or mutate
+        a capability; callers decide whether failed evidence warrants a hold.
+        """
+        configured = load_policy()
+        findings = policy_violations(source, configured)
+        proof_cases = list(cases)
         results: list[ProofResult] = []
         if findings:
             results.append(ProofResult("policy", False, "Static policy gate", "; ".join(findings)))
         else:
             results.append(ProofResult("policy", True, "Static policy gate", "No forbidden imports or operations."))
         for case in proof_cases:
-            results.append(self._run_case(proposal.source, case))
+            results.append(self._run_case(source, case))
         categories = {case.category for case in proof_cases}
         # Project policy only adds coverage; it cannot remove the hardcoded
         # normal/edge/contract minimum.
-        required_categories = set(self.REQUIRED_CATEGORIES) | set(configured.required_proof_categories)
-        missing = sorted(category for category in required_categories if category not in categories)
-        if missing:
-            results.append(ProofResult("coverage", False, "Required test categories", f"Missing: {', '.join(missing)}"))
-        else:
-            detail = "normal, edge, and contract cases supplied."
-            if supplied_adversarial:
-                detail += f" {len(supplied_adversarial)} adversarial cases supplied."
-            results.append(ProofResult("coverage", True, "Required test categories", detail))
+        if require_coverage:
+            required_categories = set(self.REQUIRED_CATEGORIES) | set(configured.required_proof_categories)
+            missing = sorted(category for category in required_categories if category not in categories)
+            if missing:
+                results.append(ProofResult("coverage", False, "Required test categories", f"Missing: {', '.join(missing)}"))
+            else:
+                detail = "normal, edge, and contract cases supplied."
+                adversarial_count = sum(case.category == "adversarial" for case in proof_cases)
+                if adversarial_count:
+                    detail += f" {adversarial_count} adversarial cases supplied."
+                results.append(ProofResult("coverage", True, "Required test categories", detail))
         passed = all(result.passed for result in results)
         trust_score = self._score(results)
-        return {"passed": passed, "trust_score": trust_score, "policy_findings": findings, "results": [asdict(result) for result in results], "coverage": sorted(categories), "failure_count": sum(not result.passed for result in results)}
+        return {
+            "passed": passed,
+            "trust_score": trust_score,
+            "policy_findings": findings,
+            "results": [asdict(result) for result in results],
+            "coverage": sorted(categories),
+            "failure_count": sum(not result.passed for result in results),
+            # Stored in the SQLite proof record so later drift checks replay
+            # the exact original contract rather than inventing replacement
+            # tests or claiming evidence that was never retained.
+            "cases": [asdict(case) for case in proof_cases],
+        }
 
     def threat_model(self, proposal: ToolProposal) -> dict[str, object]:
         source = proposal.source.lower()
