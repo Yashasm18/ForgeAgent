@@ -17,6 +17,7 @@ from forgeagent.evaluation import run_evaluation_suite
 from forgeagent.foundry import CapabilityFoundry
 from forgeagent.generator import GPT56Generator, GeneratorError
 from forgeagent.mcp_server import main as mcp_main
+from forgeagent.offline_intelligence import OfflineTemplateGenerator
 from forgeagent.repository_graph import RepositoryGraph
 from forgeagent.registry import ToolRegistry
 from forgeagent.workflows import INCIDENT_RECOVERY_PLAN
@@ -31,11 +32,14 @@ def main() -> None:
     parser.add_argument("--compare", action="store_true", help="Compare stateless execution with ForgeAgent memory")
     parser.add_argument("--graph", action="store_true", help="Export ForgeAgent's task-to-capability graph as JSON")
     parser.add_argument("--autonomous-task", help="Use GPT-5.6 to plan, forge, repair, and complete an unknown user task")
+    parser.add_argument("--offline-autonomous-task", help="Use the deterministic offline planner for known capabilities and reviewed templates")
     parser.add_argument("--foundry-task", help="Run the Capability Foundry council on a task")
     parser.add_argument("--foundry-live", action="store_true", help="Use GPT-5.6-terra for Foundry planning and proposals")
+    parser.add_argument("--offline-foundry", action="store_true", help="Use reviewed deterministic templates for supported Foundry gaps; no API key or network calls")
     parser.add_argument("--project", default="local/default", help="Foundry project namespace")
     parser.add_argument("--approval-policy", choices=("auto", "review", "never", "production"), default="auto", help="Capability promotion policy (production always requires named human approval)")
     parser.add_argument("--adversarial-proof", action="store_true", help="Use live GPT-5.6 to generate adversarial proof cases for --foundry-task (requires --foundry-live and OPENAI_API_KEY)")
+    parser.add_argument("--offline-adversarial-proof", action="store_true", help="Use deterministic adversarial cases registered for an offline template (requires --offline-foundry)")
     parser.add_argument("--repo-graph", action="store_true", help="Export the repository intelligence graph")
     parser.add_argument("--evaluate", action="store_true", help="Run the 50-case Foundry Evaluation Arena")
     parser.add_argument("--mcp", action="store_true", help="Run ForgeAgent's stdio MCP server")
@@ -82,10 +86,14 @@ def main() -> None:
         return
     if args.foundry_task:
         try:
+            if args.foundry_live and args.offline_foundry:
+                parser.error("Choose either --foundry-live or --offline-foundry, not both.")
+            if args.offline_adversarial_proof and not args.offline_foundry:
+                parser.error("--offline-adversarial-proof requires --offline-foundry.")
             payload = json.loads(args.payload) if args.payload else {"text": args.text or ""}
-            generator = GPT56Generator(model=args.model) if args.foundry_live else None
+            generator = GPT56Generator(model=args.model) if args.foundry_live else OfflineTemplateGenerator() if args.offline_foundry else None
             foundry = CapabilityFoundry(registry_path, project_id=args.project, generator=generator)
-            print(json.dumps(foundry.run(args.foundry_task, payload, approval_policy=args.approval_policy, adversarial_proof=args.adversarial_proof), indent=2))
+            print(json.dumps(foundry.run(args.foundry_task, payload, approval_policy=args.approval_policy, adversarial_proof=args.adversarial_proof or args.offline_adversarial_proof), indent=2))
         except (json.JSONDecodeError, GeneratorError, RuntimeError) as exc:
             parser.error(str(exc))
         return
@@ -126,6 +134,14 @@ def main() -> None:
             payload = json.loads(args.payload)
             live_agent = ForgeAgent(registry, generator=GPT56Generator(model=args.model))
             print(json.dumps(live_agent.execute_user_task(args.autonomous_task, payload), indent=2))
+        except (json.JSONDecodeError, GeneratorError, RuntimeError) as exc:
+            parser.error(str(exc))
+        return
+    if args.offline_autonomous_task and args.payload:
+        try:
+            payload = json.loads(args.payload)
+            offline_agent = ForgeAgent(registry, generator=OfflineTemplateGenerator())
+            print(json.dumps(offline_agent.execute_user_task(args.offline_autonomous_task, payload), indent=2))
         except (json.JSONDecodeError, GeneratorError, RuntimeError) as exc:
             parser.error(str(exc))
         return

@@ -128,7 +128,10 @@ class CapabilityFoundry:
         return self._outcome(task, capability, "trusted", result, inspection, decisions, threat, report, record, proposal.relationship if self.generator else None)
 
     def _proposal(self, task: str, payload: dict[str, object], blueprint: object | None, repository_context: str | None = None) -> ToolProposal:
-        if self.generator:
+        # A deterministic offline generator deliberately covers only a small,
+        # reviewed template catalog.  Known blueprints still use their curated
+        # offline proposals rather than asking that generator to invent them.
+        if self.generator and not (getattr(self.generator, "offline_template_only", False) and blueprint is not None):
             return self.generator.propose(task, payload, repository_context=repository_context)
         if blueprint is None:
             raise RuntimeError("A live gpt-5.6-terra generator is required for an unknown capability. Set OPENAI_API_KEY or choose a supported curated capability.")

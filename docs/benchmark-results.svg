@@ -6,14 +6,14 @@
   <text x="40" y="98" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="500" text-anchor="start">Generated locally from the source commands printed beside every metric</text>
   <rect x="40" y="130" width="1720" height="172" rx="16" fill="#ffffff" stroke="#d9e2ec"/>
 <text x="72" y="170" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="800" text-anchor="start">VERIFIED EVIDENCE SNAPSHOT</text>
-<text x="72" y="232" fill="#2459d6" font-family="Inter, Arial, sans-serif" font-size="56" font-weight="850" text-anchor="start">65</text>
+<text x="72" y="232" fill="#2459d6" font-family="Inter, Arial, sans-serif" font-size="56" font-weight="850" text-anchor="start">71</text>
 <text x="72" y="265" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="650" text-anchor="start">repository tests run</text>
 <text x="290" y="232" fill="#087f6e" font-family="Inter, Arial, sans-serif" font-size="44" font-weight="850" text-anchor="start">4 / 4</text>
 <text x="290" y="265" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="650" text-anchor="start">sandbox-security tests</text>
 <line x1="510" y1="158" x2="510" y2="274" stroke="#d9e2ec" stroke-width="1"/>
 <text x="548" y="189" fill="#10233c" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="800" text-anchor="start">Security regression coverage</text>
 <text x="548" y="218" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="400" text-anchor="start">Import-alias bypass · dunder-attribute escape · dynamic-getattr escape</text>
-<text x="548" y="252" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="650" text-anchor="start">Sandbox security 4   ·   MCP 4   ·   Package signing 4   ·   Policy 6   ·   PR review 3   ·   Repository graph 3</text>
+<text x="548" y="252" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="650" text-anchor="start">Sandbox security 4   ·   MCP 5   ·   Package signing 4   ·   Policy 6   ·   PR review 3   ·   Repository graph 3</text>
 <rect x="1335" y="156" width="213" height="30" rx="15" fill="#e3f4ef"/>
 <text x="1345" y="177" fill="#087f6e" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="750" text-anchor="start">Latest main CI: SUCCESS</text>
 <text x="1335" y="221" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="400" text-anchor="start">Source: gh run list --branch main --limit 1</text>

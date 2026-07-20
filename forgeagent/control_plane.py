@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from forgeagent.foundry import CapabilityFoundry
+from forgeagent.offline_intelligence import OfflineTemplateGenerator
 from forgeagent.platform_store import PlatformStore
 
 
@@ -113,8 +114,22 @@ class ControlPlane:
     def request_capability(self, project_id: str, actor: str, task: str, payload: dict[str, object], production: bool = True) -> dict[str, object]:
         self.require(project_id, actor, "developer")
         self._require_text(task, "task")
-        foundry = CapabilityFoundry(self.root / "tool_registry.json", project_id=project_id, root=".")
-        outcome = foundry.run(task, payload, approval_policy="production" if production else "review")
+        # The local control plane remains useful without API credits: known
+        # blueprints and explicitly reviewed templates can still be proved,
+        # governed, and held for human approval.
+        foundry = CapabilityFoundry(
+            self.root / "tool_registry.json",
+            project_id=project_id,
+            root=".",
+            generator=OfflineTemplateGenerator(),
+        )
+        try:
+            outcome = foundry.run(task, payload, approval_policy="production" if production else "review")
+        finally:
+            # CapabilityFoundry opens an independent SQLite connection for a
+            # request. The control plane owns this short-lived instance, so
+            # close it before returning to a long-running MCP/API process.
+            foundry.store.close()
         self._event(project_id, actor, "capability_requested", {"task": task, "status": outcome["status"], "production": production})
         self.db.commit()
         return outcome

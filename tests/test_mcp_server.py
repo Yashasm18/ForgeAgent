@@ -97,6 +97,33 @@ class McpTests(unittest.TestCase):
                 plane.close()
                 os.chdir(previous_directory)
 
+    def test_offline_template_is_requestable_then_reusable_over_mcp(self):
+        """No-key template creation must preserve the same approval boundary."""
+        with tempfile.TemporaryDirectory() as directory:
+            plane = ControlPlane(Path(directory) / "control")
+            try:
+                request = call("forge_request_capability", {
+                    "project_id": "billing", "task": "Extract invoice IDs from billing logs",
+                    "payload": {"text": "invoice INV-2048 is delayed"}, "production": True,
+                }, plane.store, plane)
+                self.assertEqual(request["status"], "pending")
+                self.assertEqual(request["memory_record"]["name"], "invoice_id_extractor")
+                capability_id = request["memory_record"]["id"]
+                call("forge_decide_capability", {
+                    "capability_id": capability_id, "decision": "approved", "reviewer": "Ada",
+                    "reason": "Reviewed deterministic template and proof evidence.",
+                }, plane.store, plane)
+
+                reused = call("forge_run_trusted_capability", {
+                    "project_id": "billing", "task": "Extract invoice identifiers from new billing logs",
+                    "payload": {"text": "INV-2048 and INV-9"},
+                }, plane.store, plane)
+                self.assertEqual(reused["status"], "reused")
+                self.assertEqual(reused["result"], ["INV-2048", "INV-9"])
+                self.assertEqual(reused["memory_source"], "platform_store")
+            finally:
+                plane.close()
+
     def test_separate_mcp_processes_reuse_approved_project_capability(self):
         """Judge-path regression: approval in process A is reusable in process B."""
         with tempfile.TemporaryDirectory() as directory:

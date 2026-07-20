@@ -43,11 +43,11 @@ This is the runnable local system: agents reach an MCP server, governed capabili
 
 ## Proof at a glance
 
-All figures below were generated locally without an API key on July 18, 2026.
+All figures below were generated locally without an API key on July 20, 2026.
 
 | Evidence | Measured result | Source command |
 | --- | --- | --- |
-| Regression suite | 65 tests passed | `python3 -m unittest discover -s tests -v` |
+| Regression suite | 71 tests passed | `python3 -m unittest discover -s tests -v` |
 | Sandbox security regressions | 4/4 passed; import-alias, dunder-attribute, and dynamic-`getattr` escapes remain blocked | `python3 -m unittest tests.test_sandbox_security -v` |
 | Trust-gate benchmark | 8/8 cases passed; 7/7 attack patterns blocked | `python3 main.py --benchmark` |
 | Evaluation arena | 50/50 cases passed; 10/10 unsafe proposals rejected | `python3 main.py --evaluate` |
@@ -83,6 +83,7 @@ The first command forges curated offline capabilities after proof; the second de
 | Cross-agent reuse | A capability approved by one real MCP subprocess is reused by a separate OS process from the SQLite platform store. | [`tests/test_mcp_server.py`](tests/test_mcp_server.py) |
 | Adversarial proof | An opt-in live GPT-5.6 adversarial pass creates contract-breaking cases; a failure blocks promotion and enters repair evidence. A labelled offline recorded example is also included. | [`forgeagent/generator.py`](forgeagent/generator.py), [`forgeagent/proof_engine.py`](forgeagent/proof_engine.py), [`forgeagent/demo_tasks.py`](forgeagent/demo_tasks.py) |
 | Semantic matching | When a live generator is configured, existing capabilities are matched by task intent; unavailable or failed live matching falls back to the existing offline keywords. | [`forgeagent/agent.py`](forgeagent/agent.py), [`forgeagent/generator.py`](forgeagent/generator.py) |
+| Offline intelligence | Without an API key, deterministic catalog matching resolves natural phrasing for known skills; reviewed templates can forge an invoice-ID extractor, adversarially prove it, and refuse untemplated novelty. | [`forgeagent/offline_intelligence.py`](forgeagent/offline_intelligence.py), `python3 main.py --offline-foundry --offline-adversarial-proof --foundry-task "Extract invoice IDs from billing logs" --payload '{"text":"INV-2048"}'` |
 | Structured outputs | The three live GPT-5.6 calls enforce JSON Schemas through the Responses API before parsing. | [`forgeagent/generator.py`](forgeagent/generator.py) |
 | Live Foundry Council | The dashboard polls newly appended council decisions from the SQLite + JSONL audit trail while a Foundry run is active. | [`forgeagent/dashboard.py`](forgeagent/dashboard.py), [`forgeagent/audit.py`](forgeagent/audit.py), `python3 main.py --serve` |
 | Accurate proof evidence | Capability records persist the actual passing proof-case count; the dashboard shows evidence unavailable rather than inventing a fallback value. | [`forgeagent/registry.py`](forgeagent/registry.py), [`forgeagent/dashboard.py`](forgeagent/dashboard.py) |
@@ -182,10 +183,37 @@ reused. The curated mode is intentionally labelled as a recording fallback—it
 does not claim to be a live model call.
 
 `--foundry-task` runs the five-role council. With a supported capability it
-uses the offline proposal path; add `--foundry-live` and `OPENAI_API_KEY` to
+uses the curated offline proposal path; add `--foundry-live` and `OPENAI_API_KEY` to
 let `gpt-5.6-terra` plan and propose an unknown capability. `--repo-graph`
 exports the repository graph, `--evaluate` runs 50 measured cases, and `--mcp`
 starts the stdio MCP server for compatible coding agents.
+
+### Offline intelligence (no API key)
+
+ForgeAgent is useful without credits, but it is deliberately bounded rather
+than a pretend local replacement for GPT. It performs deterministic semantic
+matching over the trusted catalog, plans known multi-step workflows, and can
+forge only explicitly reviewed templates. Today the new-template path covers
+an `invoice_id_extractor`, including two deterministic adversarial cases; an
+unsupported task is refused rather than fabricated.
+
+```bash
+# Forge, proof-check, and promote a reviewed template locally.
+python3 main.py --foundry-task "Extract invoice IDs from billing logs" \
+  --payload '{"text":"paid INV-2048; pending INV-9"}' \
+  --offline-foundry --offline-adversarial-proof
+
+# Plan and execute a known incident workflow locally.
+python3 main.py --offline-autonomous-task \
+  "Redact PII, triage the support incident, and extract stack-trace error codes" \
+  --payload '{"text":"ava@example.com cannot access service; ERROR E_TIMEOUT at api.py:7"}'
+```
+
+The local MCP/API control plane uses this same reviewed-template path. A
+`forge_request_capability` request for invoice extraction is locally proved
+then held **pending** under production policy; a named reviewer must approve
+it before any later coding-agent process can reuse it. No API key or network
+call is involved.
 
 ### Optional live adversarial proof
 

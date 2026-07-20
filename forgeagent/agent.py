@@ -127,7 +127,10 @@ class ForgeAgent:
         keyword_match = self._keyword_blueprint(task)
         if keyword_match:
             return keyword_match
-        if not self.generator or not getattr(self.generator, "semantic_matching_available", False):
+        if not self.generator or not (
+            getattr(self.generator, "semantic_matching_available", False)
+            or getattr(self.generator, "offline_semantic_matching_available", False)
+        ):
             return None
         matcher = getattr(self.generator, "match_existing_capability", None)
         if not callable(matcher):
@@ -142,12 +145,15 @@ class ForgeAgent:
         return next((item for item in BLUEPRINTS if item.name == selected_name), None)
 
     def forge(self, capability: str, payload: object, max_repairs: int = 2) -> object:
-        """Create, verify, persist, and run a model-proposed capability."""
+        """Create, verify, persist, and run a constrained capability proposal."""
         if not self.generator:
             raise RuntimeError("No GPT-5.6 generator configured. Set OPENAI_API_KEY and use live mode.")
         self.emit(f"\nREQUEST  {capability}")
         self.audit.record("capability_requested", capability, "Agent identified a capability gap", "pending")
-        self.emit("PLAN     Asking GPT-5.6 for a constrained tool and edge-case tests...")
+        if getattr(self.generator, "offline_template_only", False):
+            self.emit("PLAN     Selecting a reviewed local template and deterministic proof cases...")
+        else:
+            self.emit("PLAN     Asking GPT-5.6 for a constrained tool and edge-case tests...")
         failure = ""
         for attempt in range(max_repairs + 1):
             prompt = capability if not failure else f"{capability}. Repair the previous proposal; failure: {failure}"
@@ -268,7 +274,8 @@ class ForgeAgent:
             )
             for item in raw_steps
         )
-        self.audit.record("task_planned", user_task, f"GPT-5.6 proposed {len(steps)} dependent capability steps", "pending")
+        planner = "Deterministic offline planner" if getattr(self.generator, "offline_template_only", False) else "GPT-5.6"
+        self.audit.record("task_planned", user_task, f"{planner} proposed {len(steps)} dependent capability steps", "pending")
         return self.execute_plan(user_task, steps)
 
     def _tool_for_task(self, task: str) -> Tool | None:

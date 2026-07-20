@@ -16,6 +16,7 @@ if __package__ in {None, ""}:
 
 from forgeagent.agent import BLUEPRINTS
 from forgeagent.control_plane import ControlPlane
+from forgeagent.offline_intelligence import OfflineTemplateGenerator
 from forgeagent.platform_store import PlatformStore
 from forgeagent.repository_graph import RepositoryGraph
 from forgeagent.sandbox import execute
@@ -57,6 +58,9 @@ def _capability_name(task: str) -> str:
     blueprint = next((item for item in BLUEPRINTS if item.matches(task)), None)
     if blueprint:
         return blueprint.name
+    template = OfflineTemplateGenerator.template_capability_name(task)
+    if template:
+        return template
     return "_".join(re.findall(r"[a-z0-9]+", task.lower())[:5]) or "unnamed_capability"
 
 

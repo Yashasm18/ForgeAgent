@@ -22,6 +22,13 @@ receipts.
 candidate **pending** rather than silently promoting or reusing it. This is by
 design: use the approval workflow to make it trusted.
 
+Without `OPENAI_API_KEY`, the server still supports curated capabilities and
+explicitly reviewed local templates. For example, an invoice-ID extraction
+request is generated and proved from the deterministic `invoice_id_extractor`
+template, then remains pending until a reviewer approves it. Arbitrary new
+capabilities remain a live-model feature and are refused offline rather than
+being guessed.
+
 ## Local stdio setup
 
 Use the included [`mcp.config.example.json`](../mcp.config.example.json) as the

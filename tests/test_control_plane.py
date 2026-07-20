@@ -31,3 +31,24 @@ class ControlPlaneTests(unittest.TestCase):
                     plane.metrics("team/b", "alice")
             finally:
                 plane.close()
+
+    def test_offline_template_request_enters_review_without_an_api_key(self):
+        """The control plane can propose a reviewed local template, not just GPT work."""
+        with tempfile.TemporaryDirectory() as directory:
+            plane = ControlPlane(directory)
+            try:
+                plane.create_project("team/billing", "owner")
+                plane.grant_role("team/billing", "owner", "developer", "developer")
+
+                outcome = plane.request_capability(
+                    "team/billing",
+                    "developer",
+                    "Extract invoice IDs from these billing logs",
+                    {"text": "invoice INV-2048 is delayed"},
+                )
+
+                self.assertEqual(outcome["status"], "pending")
+                self.assertEqual(outcome["memory_record"]["name"], "invoice_id_extractor")
+                self.assertTrue(outcome["proof"]["passed"])
+            finally:
+                plane.close()
