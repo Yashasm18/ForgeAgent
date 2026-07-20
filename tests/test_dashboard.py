@@ -113,6 +113,30 @@ class DashboardAuditEndpointTests(unittest.TestCase):
 
         self.assertEqual(payload, {"pending": []})
 
+    def test_judge_mode_endpoints_run_the_real_forge_to_repair_story(self):
+        with tempfile.TemporaryDirectory() as directory:
+            registry = Path(directory) / "tool_registry.json"
+            server = create_server(registry, port=0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base = f"http://127.0.0.1:{server.server_port}"
+            try:
+                with urllib.request.urlopen(f"{base}/api/judge/state", timeout=2) as response:
+                    self.assertEqual(json.load(response)["phase"], "ready")
+                self._post_json(f"{base}/api/judge/forge")
+                self.assertEqual(self._get_json_from_url(f"{base}/api/judge/state")["phase"], "pending_review")
+                self._post_json(f"{base}/api/judge/approve")
+                reused = self._post_json(f"{base}/api/judge/reuse")
+                self.assertEqual(reused["status"], "reused")
+                self._post_json(f"{base}/api/judge/report-failure")
+                self.assertEqual(self._get_json_from_url(f"{base}/api/judge/state")["phase"], "quarantined")
+                self._post_json(f"{base}/api/judge/repair")
+                self.assertEqual(self._get_json_from_url(f"{base}/api/judge/state")["phase"], "repaired_trusted")
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
     @staticmethod
     def _get_json(server, route):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -124,6 +148,22 @@ class DashboardAuditEndpointTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=2)
+
+    @staticmethod
+    def _get_json_from_url(url):
+        with urllib.request.urlopen(url, timeout=2) as response:
+            return json.load(response)
+
+    @staticmethod
+    def _post_json(url):
+        request = urllib.request.Request(
+            url,
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=4) as response:
+            return json.load(response)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from forgeagent.benchmark import run_safety_benchmark
+from forgeagent.judge_mode import JudgeMode
 from forgeagent.platform_store import PlatformStore
 from forgeagent.registry import ToolRegistry
 
@@ -123,6 +124,12 @@ PAGE = PAGE.replace("</script></body></html>", "</script>" + LIVE_COUNCIL_SCRIPT
 PAGE = PAGE.replace(LIVE_COUNCIL_SECTION, LIVE_COUNCIL_SECTION + PENDING_SECTION)
 PAGE = PAGE.replace("</body></html>", PENDING_SCRIPT + "</body></html>")
 
+JUDGE_PAGE = r'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ForgeAgent — Judge Mode</title><style>
+*{box-sizing:border-box}body{margin:0;background:#08111b;color:#e8f0f7;font:16px Inter,ui-sans-serif,system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:46px 24px 72px}.eyebrow{color:#7ee4c3;font-size:12px;font-weight:800;letter-spacing:.15em}.hero{display:flex;justify-content:space-between;gap:30px;border-bottom:1px solid #263b4d;padding-bottom:30px}.hero h1{font-family:Georgia,serif;font-size:56px;line-height:1;margin:10px 0 16px;letter-spacing:-.055em}.hero p{max-width:670px;color:#aabccc;line-height:1.6}.seal{align-self:center;border:1px solid #7ee4c3;border-radius:50%;padding:30px 18px;color:#7ee4c3;font-size:12px;font-weight:800;letter-spacing:.1em;text-align:center}.panel{background:#0d1926;border:1px solid #263b4d;border-radius:15px;padding:24px;margin-top:18px}.panel h2{font-size:18px;margin:0 0 8px}.note{color:#8da3b6;line-height:1.5;margin:0}.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:20px}.step{background:#101f2d;border:1px solid #263b4d;border-radius:11px;min-height:134px;padding:15px;color:#9db1c3;font-size:13px}.step b{display:block;color:#e8f0f7;margin-bottom:9px}.step.active{border-color:#7ee4c3;color:#d7f2e8}.step.done{border-color:#3c8d75}.step.blocked{border-color:#e06f6f}.controls{display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}.button{border:1px solid #38566f;border-radius:9px;background:#102235;color:#e8f0f7;padding:11px 15px;font:inherit;font-weight:750;cursor:pointer}.button.primary{background:#7ee4c3;color:#082018;border-color:#7ee4c3}.button.warn{background:#3c201f;border-color:#e06f6f}.button:disabled{opacity:.38;cursor:not-allowed}.state{display:inline-block;margin-top:14px;padding:6px 10px;border-radius:999px;background:#12372f;color:#7ee4c3;font-size:12px;font-weight:800;letter-spacing:.08em}.evidence{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.metric{background:#071019;border:1px solid #263b4d;border-radius:10px;padding:14px}.metric b{display:block;color:#fff;font-size:24px;margin-top:4px}.metric span{color:#8da3b6;font-size:12px}.output{white-space:pre-wrap;overflow:auto;max-height:420px;background:#071019;border:1px solid #263b4d;border-radius:10px;padding:16px;color:#d8e7f1;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.5;margin:16px 0 0}.footer{color:#8da3b6;font-size:13px;line-height:1.5;margin-top:20px}@media(max-width:760px){.hero{display:block}.seal{display:none}.hero h1{font-size:45px}.steps{grid-template-columns:1fr}.evidence{grid-template-columns:1fr}}
+</style></head><body><main><section class="hero"><div><div class="eyebrow">FORGEAGENT / REAL LOCAL JUDGE MODE</div><h1>Break trust.<br>Watch it respond.</h1><p>This is a real, deterministic backend run—not a prerecorded animation. Each click uses the Foundry, isolated sandbox, SQLite capability memory, governance transition, feedback regression, and MCP reuse path.</p></div><div class="seal">NO API KEY<br>NO FAKE<br>STATE</div></section><section class="panel"><h2>90-second judge story</h2><p class="note">Forge a capability, approve it, reuse it, report a reproduced failure, observe quarantine, then repair it against the retained regression evidence.</p><div class="steps" id="steps"></div><div id="state" class="state">LOADING</div><div class="controls"><button class="button" data-action="reset">Reset isolated scenario</button><button class="button primary" data-action="forge">1. Forge & prove</button><button class="button primary" data-action="approve">2. Approve</button><button class="button primary" data-action="reuse">3. Reuse from memory</button><button class="button warn" data-action="report-failure">4. Report failure</button><button class="button primary" data-action="repair">5. Repair & re-prove</button></div></section><section class="panel"><h2>Live evidence</h2><p class="note">Source, proof coverage, feedback regressions, and the most recent drift result are read from the dedicated Judge Mode SQLite database.</p><div class="evidence" id="evidence"></div><pre class="output" id="output">Loading isolated scenario…</pre></section><p class="footer">Reset removes only <code>data/judge_mode/</code>. It never changes normal project memory. For full test evidence, return to the <a href="/" style="color:#7ee4c3">Forge Ledger</a>.</p></main><script>
+const steps=[['ready','Capability gap','A known task has no trusted team capability.'],['pending_review','Proof & review','Foundry proves the tool, then production governance holds it.'],['trusted','Trusted reuse','MCP replays evidence and runs the stored capability.'],['quarantined','Failure contained','A reproduced mismatch becomes regression evidence and removes trust.'],['repaired_trusted','Repair verified','A successor passes original and inherited feedback proofs.']];const labels={ready:'READY TO FORGE',pending_review:'PENDING HUMAN REVIEW',trusted:'TRUSTED',quarantined:'QUARANTINED',repaired_trusted:'REPAIRED + TRUSTED'};let current={};const byAction=Object.fromEntries([...document.querySelectorAll('[data-action]')].map(button=>[button.dataset.action,button]));function esc(value){return String(value??'')}function render(state){current=state;document.getElementById('state').textContent=labels[state.phase]||String(state.phase).toUpperCase();document.getElementById('steps').innerHTML=steps.map(([phase,title,body])=>{const index=steps.findIndex(item=>item[0]===phase),active=phase===state.phase,done=steps.findIndex(item=>item[0]===state.phase)>index;return `<article class="step ${active?'active':''} ${done?'done':''} ${phase==='quarantined'&&active?'blocked':''}"><b>${index+1}. ${title}</b>${body}</article>`}).join('');const allowed=new Set(state.available_actions||[]);Object.entries(byAction).forEach(([action,button])=>button.disabled=action!=='reset'&&!allowed.has(action));const evidence=state.evidence;if(!evidence){document.getElementById('evidence').innerHTML='<div class="metric"><span>No capability evidence yet</span><b>—</b></div>';return}const proof=evidence.proof||{},coverage=Array.isArray(proof.coverage)?proof.coverage.join(', '):'unavailable',drift=evidence.latest_drift?.state||'not run';document.getElementById('evidence').innerHTML=`<div class="metric"><span>Capability version</span><b>${esc(evidence.name)}@v${esc(evidence.version)}</b></div><div class="metric"><span>Trust / state</span><b>${esc(evidence.trust_score)} / ${esc(evidence.state)}</b></div><div class="metric"><span>Proof coverage</span><b>${esc(coverage)}</b></div><div class="metric"><span>Feedback regressions / drift</span><b>${esc(evidence.feedback_regression_count)} / ${esc(drift)}</b></div>`}async function refresh(){const response=await fetch('/api/judge/state',{cache:'no-store'});const state=await response.json();render(state);return state}async function action(name){const button=byAction[name];if(button)button.disabled=true;document.getElementById('output').textContent=`Running real Judge Mode action: ${name}…`;try{const response=await fetch(`/api/judge/${name}`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const data=await response.json();if(!response.ok)throw new Error(data.error||'action failed');document.getElementById('output').textContent=JSON.stringify(data,null,2);await refresh()}catch(error){document.getElementById('output').textContent=`ACTION BLOCKED: ${error.message}`;await refresh()}}Object.entries(byAction).forEach(([name,button])=>button.onclick=()=>action(name));refresh();
+</script></body></html>'''
+
 
 def create_server(
     registry_path: str | Path = "data/tool_registry.json",
@@ -131,6 +138,7 @@ def create_server(
 ) -> ThreadingHTTPServer:
     """Build the local dashboard server for use by the CLI and endpoint tests."""
     path = Path(registry_path)
+    judge = JudgeMode(path.parent / "judge_mode", repository_root=Path.cwd())
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
@@ -158,6 +166,12 @@ def create_server(
                 except (FileNotFoundError, json.JSONDecodeError):
                     graph = {"nodes": [], "edges": []}
                 body, content_type = json.dumps(graph).encode(), "application/json"
+            elif request.path == "/api/judge/state":
+                body, content_type = json.dumps(judge.state()).encode(), "application/json"
+            elif request.path == "/judge":
+                body, content_type = JUDGE_PAGE.encode(), "text/html; charset=utf-8"
+            elif request.path == "/favicon.ico":
+                body, content_type = b"", "image/x-icon"
             elif request.path == "/":
                 body, content_type = PAGE.encode(), "text/html; charset=utf-8"
             else:
@@ -165,6 +179,35 @@ def create_server(
                 return
             self.send_response(200)
             self.send_header("Content-Type", content_type)
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_POST(self) -> None:  # noqa: N802
+            request = urlparse(self.path)
+            actions = {
+                "/api/judge/reset": judge.reset,
+                "/api/judge/forge": judge.forge,
+                "/api/judge/approve": judge.approve,
+                "/api/judge/reuse": judge.reuse,
+                "/api/judge/report-failure": judge.report_failure,
+                "/api/judge/repair": judge.repair,
+            }
+            action = actions.get(request.path)
+            if action is None:
+                self.send_error(404)
+                return
+            try:
+                size = int(self.headers.get("Content-Length", "0"))
+                if size > 16_384:
+                    raise ValueError("Judge Mode accepts no large request body")
+                if size:
+                    self.rfile.read(size)
+                body, status = json.dumps(action()).encode(), 200
+            except ValueError as exc:
+                body, status = json.dumps({"error": str(exc)}).encode(), 409
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(body)
@@ -177,4 +220,5 @@ def create_server(
 
 def serve(registry_path: str | Path = "data/tool_registry.json", port: int = 8787) -> None:
     print(f"Forge Ledger running at http://127.0.0.1:{port}")
+    print(f"Judge Mode running at http://127.0.0.1:{port}/judge")
     create_server(registry_path, port=port).serve_forever()

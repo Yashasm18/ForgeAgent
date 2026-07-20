@@ -3,8 +3,10 @@ data/tool_registry.json
 data/capability_graph.json
 data/*.jsonl
 data/*.sqlite3
+data/judge_mode/
 .env
 .env.*
 *.key
 output/
 .playwright-cli/
+ForageAgent-share.zip

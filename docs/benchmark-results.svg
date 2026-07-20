@@ -6,7 +6,7 @@
   <text x="40" y="98" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="500" text-anchor="start">Generated locally from the source commands printed beside every metric</text>
   <rect x="40" y="130" width="1720" height="172" rx="16" fill="#ffffff" stroke="#d9e2ec"/>
 <text x="72" y="170" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="800" text-anchor="start">VERIFIED EVIDENCE SNAPSHOT</text>
-<text x="72" y="232" fill="#2459d6" font-family="Inter, Arial, sans-serif" font-size="56" font-weight="850" text-anchor="start">83</text>
+<text x="72" y="232" fill="#2459d6" font-family="Inter, Arial, sans-serif" font-size="56" font-weight="850" text-anchor="start">85</text>
 <text x="72" y="265" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="650" text-anchor="start">repository tests run</text>
 <text x="290" y="232" fill="#087f6e" font-family="Inter, Arial, sans-serif" font-size="44" font-weight="850" text-anchor="start">4 / 4</text>
 <text x="290" y="265" fill="#63748a" font-family="Inter, Arial, sans-serif" font-size="17" font-weight="650" text-anchor="start">sandbox-security tests</text>

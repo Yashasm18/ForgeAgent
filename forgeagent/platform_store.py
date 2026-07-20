@@ -265,6 +265,42 @@ class PlatformStore:
     def events(self, project_id: str) -> list[dict[str, object]]:
         return [dict(row) for row in self.db.execute("SELECT kind,detail,created_at FROM events WHERE project_id = ? ORDER BY id", (project_id,))]
 
+    def capability_evidence(self, capability_id: str) -> dict[str, object]:
+        """Return the stored evidence package for an explicit local review flow."""
+        record = self.get(capability_id)
+        proof_row = self.db.execute(
+            "SELECT result_json FROM proofs WHERE capability_id = ? ORDER BY id DESC LIMIT 1",
+            (capability_id,),
+        ).fetchone()
+        drift_row = self.db.execute(
+            "SELECT result_json,state,created_at FROM drift_runs WHERE capability_id = ? ORDER BY id DESC LIMIT 1",
+            (capability_id,),
+        ).fetchone()
+        feedback_count = self.db.execute(
+            "SELECT COUNT(*) FROM capability_feedback WHERE capability_id = ?",
+            (capability_id,),
+        ).fetchone()[0]
+        lineage_regression_count = self.db.execute(
+            "SELECT COUNT(*) FROM regression_cases r JOIN capabilities c ON c.id = r.capability_id "
+            "WHERE c.project_id = ? AND c.name = ?",
+            (record.project_id, record.name),
+        ).fetchone()[0]
+        return {
+            **asdict(record),
+            "proof": json.loads(proof_row["result_json"]) if proof_row else {},
+            "feedback_regression_count": int(lineage_regression_count),
+            "feedback_count": int(feedback_count),
+            "latest_drift": (
+                {
+                    "state": str(drift_row["state"]),
+                    "created_at": drift_row["created_at"],
+                    "report": json.loads(drift_row["result_json"]),
+                }
+                if drift_row
+                else None
+            ),
+        }
+
     def decide(self, capability_id: str, decision: str, reviewer: str, reason: str) -> CapabilityRecord:
         if decision not in {"approved", "rejected"}:
             raise ValueError("decision must be approved or rejected")
