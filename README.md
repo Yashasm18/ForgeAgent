@@ -6,6 +6,12 @@ ForgeAgent helps AI coding agents and developer teams turn generated code into v
 
 Here, an agent forges a capability once, verifies it, then reuses the proven version instead of regenerating it.
 
+### Live terminal recording
+
+![Real ForgeAgent terminal run: forge, verify, reuse](docs/forgeagent-terminal-demo.gif)
+
+This is a real zero-API-key capture of `python3 main.py --demo --reset`, generated from [`scripts/record_terminal_demo.tape`](scripts/record_terminal_demo.tape). For the browser-first product story—request, approval, reuse, failure containment, repair, and reuse—run `python3 main.py --serve` and open `http://127.0.0.1:8787/showcase`.
+
 ```text
 TASK  Normalize inconsistent date formats in this import log
 GAP    I need 'date_format_normalizer', and I do not have it. I will build it.
