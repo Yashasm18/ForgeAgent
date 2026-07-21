@@ -98,9 +98,26 @@ class PlatformStore:
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
         self.db.commit()
+        self._closed = False
 
     def close(self) -> None:
-        self.db.close()
+        """Close the SQLite connection; safe to call more than once."""
+        if not self._closed:
+            self.db.close()
+            self._closed = True
+
+    def __enter__(self) -> "PlatformStore":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+    def __del__(self) -> None:
+        """Best-effort last line of defense for short-lived local processes."""
+        try:
+            self.close()
+        except (AttributeError, sqlite3.Error):
+            pass
 
     def promote(self, project_id: str, name: str, source: str, provenance: str, proof: dict[str, object], policy: str = "auto", threat_model: dict[str, object] | None = None, requested_task: str | None = None) -> CapabilityRecord:
         if not project_id.strip() or not name.strip():

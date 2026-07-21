@@ -9,4 +9,3 @@ data/judge_mode/
 *.key
 output/
 .playwright-cli/
-ForageAgent-share.zip
