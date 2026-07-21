@@ -14,6 +14,14 @@ This is a real zero-API-key capture of [`python3 scripts/run_video_demo.py`](scr
 
 On July 21, 2026, a live OpenAI `gpt-5.6-terra` Foundry run created the previously missing `extract_invoice_ids` capability from an explicit ASCII-only contract. Its first two candidates were rejected with 5 and 3 proof failures; the live adversarial pass supplied 4, then 3, then 2 targeted cases across the repair loop. The repaired `extract_invoice_ids@v2` passed normal, edge, three contract, and two adversarial cases at trust score 100; an exact later request returned `status: "reused"` with no new model generation. This is separate from the hosted and offline demos, which remain deliberately key-free.
 
+To reproduce the live path after setting `OPENAI_API_KEY` in your shell (never commit a key), run:
+
+```bash
+python3 main.py --foundry-task "Build a pure Python invoice ID extractor. From payload.text, return unique IDs matching the exact ASCII pattern INV-[0-9]+ in first-seen order. Reject Unicode, superscript, circled, and full-width numerals. Reject IDs embedded in larger words, underscores, or hyphenated tokens." \
+  --payload '{"text":"Repeat: INV-77, INV-77, INV-88. Invalid: INV-² and XINV-9."}' \
+  --foundry-live --provider openai --model gpt-5.6-terra --adversarial-proof
+```
+
 ### What this proves
 
 - **Build with evidence:** a missing capability earns entry to memory only after isolated proof, policy checks, and a clear contract.
