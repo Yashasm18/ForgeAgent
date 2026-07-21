@@ -49,6 +49,7 @@ def _rank(task: str, catalog: Iterable[dict[str, str]]) -> str | None:
 class OfflineTemplateGenerator:
     """Reviewed local templates and proofs, with no model or network calls."""
 
+    provider_label = "deterministic offline template generator"
     offline_semantic_matching_available = True
     # Foundry must retain the curated blueprint path for known capabilities;
     # this generator only owns explicitly reviewed templates for new work.

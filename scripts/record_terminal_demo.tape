@@ -1,10 +1,10 @@
-# Reproduces the short terminal proof embedded at the top of README.md.
-# Requires VHS only for asset generation; the recorded ForgeAgent commands
-# themselves use no package or API key.
+# Reproduces the complete trust-lifecycle recording embedded in README.md.
+# Requires VHS only for asset generation; the recorded ForgeAgent process uses
+# no package or API key.
 Output "docs/forgeagent-terminal-demo.gif"
 
 Set Width 1260
-Set Height 700
+Set Height 760
 Set FontSize 22
 Set TypingSpeed 18ms
 Set Padding 26
@@ -20,6 +20,6 @@ Type "clear"
 Enter
 Sleep 500ms
 
-Type "python3 main.py --demo --reset"
+Type "python3 scripts/run_video_demo.py --pause 1.1"
 Enter
-Sleep 5s
+Sleep 10s

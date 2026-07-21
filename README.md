@@ -10,7 +10,7 @@ Here, an agent forges a capability once, verifies it, then reuses the proven ver
 
 ![Real ForgeAgent terminal run: forge, verify, reuse](docs/forgeagent-terminal-demo.gif)
 
-This is a real zero-API-key capture of `python3 main.py --demo --reset`, generated from [`scripts/record_terminal_demo.tape`](scripts/record_terminal_demo.tape). For the browser-first product story—request, approval, reuse, failure containment, repair, and reuse—run `python3 main.py --serve` and open `http://127.0.0.1:8787/showcase`.
+This is a real zero-API-key capture of [`python3 scripts/run_video_demo.py`](scripts/run_video_demo.py), generated from [`scripts/record_terminal_demo.tape`](scripts/record_terminal_demo.tape). It runs the actual Foundry, isolated proof, production approval, persistent reuse, reproduced failure/quarantine, inherited-regression repair, and v2 reuse paths. For the browser-first version of the same story, run `python3 main.py --serve` and open `http://127.0.0.1:8787/showcase`.
 
 ```text
 TASK  Normalize inconsistent date formats in this import log
