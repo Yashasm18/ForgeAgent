@@ -131,6 +131,51 @@ const steps=[['ready','Capability gap','A known task has no trusted team capabil
 </script></body></html>'''
 
 
+SHOWCASE_PAGE = r'''<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ForgeAgent — Live capability story</title>
+  <style>
+    *{box-sizing:border-box} body{margin:0;background:#08111b;color:#e8f0f7;font:16px Inter,ui-sans-serif,system-ui,sans-serif}
+    main{max-width:1100px;margin:auto;padding:54px 24px 74px}.eyebrow{color:#7ee4c3;font-size:12px;font-weight:800;letter-spacing:.15em}.hero{border-bottom:1px solid #263b4d;padding-bottom:34px}.hero h1{font-family:Georgia,serif;font-size:58px;line-height:1;margin:11px 0 17px;letter-spacing:-.055em}.hero p{max-width:720px;color:#aabccc;line-height:1.6}.request{margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:14px}.request-card,.timeline{border:1px solid #263b4d;border-radius:14px;background:#0d1926}.request-card{padding:18px}.label{color:#7ee4c3;font-size:11px;font-weight:800;letter-spacing:.1em}.request-card h2{font-size:17px;margin:8px 0}.request-card p{color:#aabccc;line-height:1.5;margin:0}.code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;color:#d8e7f1;background:#071019;border:1px solid #263b4d;border-radius:8px;padding:12px;margin-top:13px}.action{margin-top:26px;border:0;border-radius:9px;background:#7ee4c3;color:#082018;padding:13px 18px;font:inherit;font-weight:800;cursor:pointer}.action:disabled{opacity:.55;cursor:wait}.notice{display:inline-block;margin-left:12px;color:#8da3b6;font-size:13px}.timeline{margin-top:22px;padding:22px}.timeline h2{font-size:18px;margin:0 0 14px}.event{display:grid;grid-template-columns:39px 1fr;gap:13px;padding:14px 0;border-top:1px solid #263b4d}.event:first-of-type{border-top:0}.event-number{height:28px;width:28px;display:grid;place-items:center;border-radius:50%;background:#163a35;color:#7ee4c3;font-size:12px;font-weight:800}.event h3{font-size:15px;margin:0 0 4px}.event p{color:#aabccc;font:13px ui-monospace,SFMono-Regular,Menlo,monospace;line-height:1.5;margin:0;white-space:pre-wrap}.event.pending .event-number{background:#443720;color:#f6d18b}.event.blocked .event-number{background:#40201f;color:#f1a4a1}.event.ready .event-number{background:#163a35;color:#7ee4c3}.footer{margin-top:20px;color:#8da3b6;font-size:13px}.footer a{color:#7ee4c3}@media(max-width:700px){main{padding:34px 18px}.hero h1{font-size:45px}.request{grid-template-columns:1fr}.notice{display:block;margin:10px 0 0}}
+  </style>
+</head>
+<body>
+<main>
+  <section class="hero">
+    <div class="eyebrow">FORGEAGENT / LIVE CAPABILITY STORY</div>
+    <h1>One agent builds it.<br>Every agent can trust it.</h1>
+    <p>Run a real end-to-end ForgeAgent lifecycle: a coding agent requests a capability, governance holds it for review, another agent reuses it, a real regression removes trust, and a repaired version earns reuse again.</p>
+    <button id="run" class="action">Run the live story</button><span id="notice" class="notice">Uses an isolated local SQLite database. No API key.</span>
+  </section>
+  <section class="request">
+    <article class="request-card"><div class="label">FIRST REQUEST / CODING AGENT</div><h2>“Extract invoice IDs from billing logs.”</h2><div class="code">{ "text": "Invoices INV-2048 and INV-9 are awaiting review." }</div></article>
+    <article class="request-card"><div class="label">LATER REQUEST / ANOTHER AGENT</div><h2>“Run the verified invoice extractor.”</h2><p>ForgeAgent must return a trusted capability from persistent memory, not generate fresh code. It replays retained contract evidence before reuse.</p></article>
+  </section>
+  <section class="timeline"><h2>What the system actually does</h2><div id="events"><div class="event"><div class="event-number">•</div><div><h3>Ready</h3><p>Click “Run the live story” to execute the real local Foundry flow.</p></div></div></div></section>
+  <p class="footer">Want to inspect every individual action? Use <a href="/judge">Judge Mode</a>. This walkthrough resets only <code>data/judge_mode/</code>.</p>
+</main>
+<script>
+const events=document.getElementById('events'),run=document.getElementById('run'),notice=document.getElementById('notice');
+const story=[
+  ['ready','A coding agent requests a new capability','The Foundry creates a constrained candidate and runs isolated normal, edge, contract, and adversarial proof cases.','forge'],
+  ['pending','Production governance holds it','The proven candidate is intentionally pending until a named reviewer approves it.','approve'],
+  ['ready','Cursor reuses trusted memory','A later coding agent gets the stored capability. ForgeAgent replays its retained contract before returning the real result.','reuse'],
+  ['blocked','A reproduced defect revokes trust','The duplicate-ID output differs from the contract, so feedback becomes a regression case and the capability is quarantined.','report-failure'],
+  ['ready','The repair must prove the old failure','A v2 candidate is accepted only after original proof plus the inherited feedback regression pass.','repair'],
+  ['ready','Another agent reuses the repaired v2','The repaired capability is retrieved from memory and its contract is checked again before it executes.','reuse']
+];
+function evidenceSummary(action,data,fallback){if(!data)return fallback;if(action==='forge'){const proof=data.proof||{},coverage=Array.isArray(proof.coverage)?proof.coverage.join(', '):'unavailable';return `REAL RESULT: ${data.memory_record?.name||'candidate'}@v${data.memory_record?.version||'?'} is ${data.status}. Proof: ${proof.passed?'passed':'failed'}; coverage: ${coverage}; trust score: ${proof.trust_score??'unavailable'}.`};if(action==='approve')return `REAL RESULT: ${data.name}@v${data.version} is now ${data.state} after named human approval.`;if(action==='reuse'){const drift=data.drift_check?.status||'unavailable';return `REAL RESULT: ${data.memory_record?.name}@v${data.memory_record?.version||'?'} reused from ${data.memory_source||'memory'}; drift replay ${drift}; output ${JSON.stringify(data.result)}.`};if(action==='report-failure'){return `REAL RESULT: ${data.status}; actual output ${JSON.stringify(data.execution?.actual_output)}; trusted reuse quarantined: ${data.quarantined?'yes':'no'}.`};if(action==='repair')return `REAL RESULT: ${data.name}@v${data.version} promoted as ${data.state}. Its proof now includes the retained feedback regression.`;return fallback}
+function add(kind,title,detail,data,index,action){const row=document.createElement('article');row.className=`event ${kind}`;row.innerHTML=`<div class="event-number">${index}</div><div><h3>${title}</h3><p></p></div>`;row.querySelector('p').textContent=evidenceSummary(action,data,detail);events.appendChild(row)}
+async function post(action){const response=await fetch(`/api/judge/${action}`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});const data=await response.json();if(!response.ok)throw new Error(data.error||'request failed');return data}
+run.addEventListener('click',async()=>{run.disabled=true;events.innerHTML='';notice.textContent='Running the real local flow…';try{await post('reset');for(let i=0;i<story.length;i++){const [kind,title,detail,action]=story[i];const data=await post(action);add(kind,title,detail,data,i+1,action)}notice.textContent='Completed: v2 is trusted and reusable.'}catch(error){add('blocked','Story stopped safely',String(error),null,'!','');notice.textContent='A real policy or proof boundary stopped the scenario.'}finally{run.disabled=false}})
+</script>
+</body>
+</html>'''
+
+
 def create_server(
     registry_path: str | Path = "data/tool_registry.json",
     host: str = "127.0.0.1",
@@ -170,6 +215,8 @@ def create_server(
                 body, content_type = json.dumps(judge.state()).encode(), "application/json"
             elif request.path == "/judge":
                 body, content_type = JUDGE_PAGE.encode(), "text/html; charset=utf-8"
+            elif request.path == "/showcase":
+                body, content_type = SHOWCASE_PAGE.encode(), "text/html; charset=utf-8"
             elif request.path == "/favicon.ico":
                 body, content_type = b"", "image/x-icon"
             elif request.path == "/":

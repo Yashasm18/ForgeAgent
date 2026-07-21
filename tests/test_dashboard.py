@@ -137,6 +137,22 @@ class DashboardAuditEndpointTests(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=2)
 
+    def test_video_showcase_page_is_available(self):
+        with tempfile.TemporaryDirectory() as directory:
+            registry = Path(directory) / "tool_registry.json"
+            server = create_server(registry, port=0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{server.server_port}/showcase", timeout=2) as response:
+                    page = response.read().decode("utf-8")
+                self.assertIn("One agent builds it", page)
+                self.assertIn("Run the live story", page)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=2)
+
     @staticmethod
     def _get_json(server, route):
         thread = threading.Thread(target=server.serve_forever, daemon=True)

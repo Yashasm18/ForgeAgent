@@ -47,7 +47,7 @@ All figures below were generated locally without an API key on July 20, 2026.
 
 | Evidence | Measured result | Source command |
 | --- | --- | --- |
-| Regression suite | 85 tests passed (6 optional-policy tests skipped when PyYAML is absent) | `python3 -m unittest discover -s tests -v` |
+| Regression suite | 86 tests passed (6 optional-policy tests skipped when PyYAML is absent) | `python3 -m unittest discover -s tests -v` |
 | Sandbox security regressions | 4/4 passed; import-alias, dunder-attribute, and dynamic-`getattr` escapes remain blocked | `python3 -m unittest tests.test_sandbox_security -v` |
 | Trust-gate benchmark | 8/8 cases passed; 7/7 attack patterns blocked | `python3 main.py --benchmark` |
 | Evaluation arena | 50/50 cases passed; 10/10 unsafe proposals rejected | `python3 main.py --evaluate` |
@@ -77,7 +77,7 @@ The first command forges curated offline capabilities after proof; the second de
 
 ### One-click Judge Mode
 
-For a browser-first evaluation, run `python3 main.py --serve` and open [`http://127.0.0.1:8787/judge`](http://127.0.0.1:8787/judge). The isolated local scenario uses the real Foundry and SQLite memory to forge and prove an invoice extractor, hold it for human approval, reuse it through the MCP reuse path, quarantine it after a reproduced duplicate-ID failure, and promote a repaired successor only after it passes the retained feedback regression. It requires no API key and resets only `data/judge_mode/`.
+For a video-ready browser walkthrough, run `python3 main.py --serve` and open [`http://127.0.0.1:8787/showcase`](http://127.0.0.1:8787/showcase). One click runs the real lifecycle: a coding agent requests a capability, production governance holds it, another agent reuses it, a reproduced failure quarantines it, and a repaired successor must pass the retained regression before reuse. For individual controls and full raw evidence, open [`http://127.0.0.1:8787/judge`](http://127.0.0.1:8787/judge). Both use an isolated local SQLite scenario, require no API key, and reset only `data/judge_mode/`.
 
 ## What's implemented
 
@@ -92,7 +92,7 @@ For a browser-first evaluation, run `python3 main.py --serve` and open [`http://
 | Live Foundry Council | The dashboard polls newly appended council decisions from the SQLite + JSONL audit trail while a Foundry run is active. | [`forgeagent/dashboard.py`](forgeagent/dashboard.py), [`forgeagent/audit.py`](forgeagent/audit.py), `python3 main.py --serve` |
 | Accurate proof evidence | Capability records persist the actual passing proof-case count; the dashboard shows evidence unavailable rather than inventing a fallback value. | [`forgeagent/registry.py`](forgeagent/registry.py), [`forgeagent/dashboard.py`](forgeagent/dashboard.py) |
 | Contract drift and feedback regression | Replays persisted proof cases for trusted versions, quarantines a reproduced failure, and carries verified feedback regressions into successor versions before they can earn trust. | [`forgeagent/platform_store.py`](forgeagent/platform_store.py), `python3 main.py --contract-drift --project local/default` |
-| One-click Judge Mode | A browser-driven, real local lifecycle: forge → human approval → cross-call reuse → reproduced failure/quarantine → repair with inherited regression proof. It uses its own isolated SQLite directory. | [`forgeagent/judge_mode.py`](forgeagent/judge_mode.py), [`forgeagent/dashboard.py`](forgeagent/dashboard.py), `python3 main.py --serve` then `http://127.0.0.1:8787/judge` |
+| Video walkthrough + Judge Mode | A browser-driven, real local lifecycle: forge → human approval → cross-call reuse → reproduced failure/quarantine → repair with inherited regression proof. The walkthrough is one-click; Judge Mode exposes each individual action. Both use their own isolated SQLite directory. | [`forgeagent/judge_mode.py`](forgeagent/judge_mode.py), [`forgeagent/dashboard.py`](forgeagent/dashboard.py), `python3 main.py --serve` then `http://127.0.0.1:8787/showcase` |
 | Reproducible evaluation | The benchmark chart is regenerated from the local benchmark, evaluation, and comparison commands. | [`scripts/generate_benchmark_chart.py`](scripts/generate_benchmark_chart.py) |
 | Production reference profile | An optional rootless, no-egress container profile and stricter approval policy are available for validation. | [`Dockerfile.sandbox`](Dockerfile.sandbox), [`compose.production.yml`](compose.production.yml) |
 
@@ -582,5 +582,5 @@ policy/test rejection.
 - Live-provider proof: set `OPENAI_API_KEY` for GPT-5.6, or run Ollama locally
   and use `--provider ollama` as above.
 - Visual inspection: `python3 main.py --serve`.
-- Browser-first Judge Mode: open `http://127.0.0.1:8787/judge`, then click **Forge & prove**, **Approve**, **Reuse from memory**, **Report failure**, and **Repair & re-prove**. Every transition is backed by the real isolated local Foundry state.
+- Video walkthrough: open `http://127.0.0.1:8787/showcase` and click **Run the live story**. For individual controls, use `http://127.0.0.1:8787/judge`. Every transition is backed by the real isolated local Foundry state.
 - Verification snapshot: `python3 -m unittest discover -s tests -v`.
