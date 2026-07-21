@@ -71,7 +71,11 @@ def _capability_name(task: str) -> str:
 def _run_project_trusted_capability(store: PlatformStore, project_id: str, task: str, payload: dict[str, object]) -> dict[str, object] | None:
     """Run only an already-approved SQLite capability for an MCP namespace."""
     capability = _capability_name(task)
-    record = next((item for item in store.list(project_id, trusted_only=True) if item.name == capability), None)
+    # First honor exact request lineage.  A live model can give its verified
+    # capability a name that differs from the task slug used by this server.
+    record = store.trusted_for_task(project_id, task)
+    if record is None:
+        record = next((item for item in store.list(project_id, trusted_only=True) if item.name == capability), None)
     if record is None:
         return None
     # Reuse is also a maintenance checkpoint. A trusted record with retained
@@ -90,13 +94,13 @@ def _run_project_trusted_capability(store: PlatformStore, project_id: str, task:
     exported = asdict(record)
     return {
         "task": task,
-        "capability": capability,
+        "capability": record.name,
         "status": "reused",
         "result": result,
         "council": [
-            {"role": "planner", "status": "complete", "detail": f"Task maps to capability '{capability}'."},
+            {"role": "planner", "status": "complete", "detail": f"Task maps to capability '{record.name}'."},
             {"role": "builder", "status": "skipped", "detail": "An approved project capability already exists."},
-            {"role": "governor", "status": "reused", "detail": f"Reused approved {capability}@v{record.version} from project capability memory."},
+            {"role": "governor", "status": "reused", "detail": f"Reused approved {record.name}@v{record.version} from project capability memory."},
         ],
         "inspection": {"impact": [], "existing_trusted_tool": exported, "match_count": 1},
         "threat_model": None,

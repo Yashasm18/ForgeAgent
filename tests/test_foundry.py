@@ -117,6 +117,27 @@ class FoundryTests(unittest.TestCase):
             self.assertIn('"input": {"text": "INV-1"}', repair_task)
             self.assertIn("Exact failed proof cases", repair_task)
 
+    def test_live_named_capability_reuses_exact_request_without_a_second_generation(self):
+        """Live names need not match task slugs; request lineage still reuses safely."""
+        proposal = ToolProposal(
+            "extract_invoice_ids", "Extract unique invoice IDs.",
+            "import re\ndef run(payload):\n    return list(dict.fromkeys(re.findall(r'(?<![A-Za-z0-9_-])INV-[0-9]+(?![A-Za-z0-9_-])', payload['text'])))\n",
+            (({"text": "INV-2048, INV-2048, INV-9910"}, ["INV-2048", "INV-9910"]),),
+            "fake live proposal",
+        )
+        task = "Build a pure Python invoice ID extractor for exact ASCII INV-number tokens"
+        with tempfile.TemporaryDirectory() as directory:
+            generator = SequenceGenerator([proposal])
+            foundry = CapabilityFoundry(Path(directory) / "registry.json", root=directory, generator=generator)
+            forged = foundry.run(task, {"text": "INV-2048, INV-9910"})
+            reused = foundry.run(task, {"text": "INV-77, INV-77, INV-88"})
+
+        self.assertEqual(forged["status"], "trusted")
+        self.assertEqual(reused["status"], "reused")
+        self.assertEqual(reused["result"], ["INV-77", "INV-88"])
+        self.assertEqual(reused["inspection"]["existing_trusted_tool"]["name"], "extract_invoice_ids")
+        self.assertEqual(len(generator.tasks), 1)
+
     def test_adversarial_generator_case_blocks_promotion(self):
         proposal = ToolProposal(
             "slug_normalizer", "Normalize a release name into a slug.",

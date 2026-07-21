@@ -14,6 +14,7 @@ from forgeagent.platform_store import PlatformStore
 from forgeagent.proof_engine import ProofEngine
 from forgeagent.repository_graph import RepositoryGraph
 from forgeagent.registry import ToolRegistry
+from forgeagent.sandbox import execute
 
 
 @dataclass(frozen=True)
@@ -50,16 +51,21 @@ class CapabilityFoundry:
         decisions.append(decision)
         self.audit.record(f"council_{role}", capability, detail, status)
 
-    def inspect(self, capability: str) -> dict[str, object]:
+    def inspect(self, capability: str, task: str | None = None) -> dict[str, object]:
         graph = RepositoryGraph(self.root)
         graph.build()
         existing = self.registry.get(capability)
+        # A live proposal may intentionally choose a better name than the
+        # deterministic task slug.  Preserve its request lineage so an exact
+        # repeat takes the reuse path before any provider call is considered.
+        if existing is None and task is not None:
+            existing = self.store.trusted_for_task(self.project_id, task)
         return {"capability": capability, "existing_trusted_tool": asdict(existing) if existing else None, "repository_matches": graph.query(capability), "impact": graph.impact(capability), "graph": graph.export()}
 
     def run(self, task: str, payload: dict[str, object], approval_policy: str = "auto", max_repairs: int = 2, adversarial_proof: bool = False) -> dict[str, object]:
         blueprint = next((item for item in BLUEPRINTS if item.matches(task)), None)
         capability = blueprint.name if blueprint else self._slug(task)
-        inspection = self.inspect(capability)
+        inspection = self.inspect(capability, task)
         decisions: list[CouncilDecision] = []
         self._record_decision(decisions, capability, "planner", "complete", f"Task maps to capability '{capability}'.")
         if adversarial_proof and self.generator is None:
@@ -69,10 +75,21 @@ class CapabilityFoundry:
                 self._record_decision(decisions, capability, "builder", "skipped", "An existing capability was found; production reuse is still subject to review.")
                 self._record_decision(decisions, capability, "governor", "pending", "Production policy requires a named human approval before reuse.")
                 return self._outcome(task, capability, "pending", None, inspection, decisions)
-            agent = ForgeAgent(self.registry, emit=lambda _: None)
-            result = agent.complete(task, payload)
+            existing_name = str(inspection["existing_trusted_tool"]["name"])
+            tool = self.registry.get(existing_name)
+            if tool is None:
+                # SQLite is the source of truth for Foundry memory.  A
+                # registry record can be absent after a local cleanup, but a
+                # trusted, proof-backed store record remains executable.
+                result = execute(str(inspection["existing_trusted_tool"]["source"]), payload)
+            else:
+                agent = ForgeAgent(self.registry, emit=lambda _: None)
+                result = agent._verify_and_run(
+                    ToolProposal(tool.name, tool.description, tool.source, (), tool.provenance),
+                    payload,
+                )
             self._record_decision(decisions, capability, "builder", "skipped", "A trusted capability already exists.")
-            self._record_decision(decisions, capability, "governor", "reused", f"Reused {capability} without creating new code.")
+            self._record_decision(decisions, capability, "governor", "reused", f"Reused {existing_name} without creating new code.")
             return self._outcome(task, capability, "reused", result, inspection, decisions)
         repository_context = self._repository_context(inspection) if self.generator else None
         proposal = self._proposal(task, payload, blueprint, repository_context)

@@ -353,6 +353,23 @@ class PlatformStore:
         sql += " ORDER BY created_at DESC"
         return [CapabilityRecord(**dict(row)) for row in self.db.execute(sql, (project_id,))]
 
+    def trusted_for_task(self, project_id: str, task: str) -> CapabilityRecord | None:
+        """Return the newest trusted capability proven for this exact request.
+
+        A live model is free to choose a clear capability name that differs
+        from ForgeAgent's deterministic task slug.  Request lineage is the
+        durable identity in that case: re-running the same request must reuse
+        the already-proven tool instead of paying to regenerate it.
+        """
+        row = self.db.execute(
+            "SELECT c.id,c.project_id,c.name,c.version,c.source,c.provenance,c.trust_score,c.state "
+            "FROM capabilities c JOIN capability_requests r ON r.capability_id = c.id "
+            "WHERE c.project_id = ? AND c.state = 'trusted' AND r.task = ? "
+            "ORDER BY r.created_at DESC, c.version DESC LIMIT 1",
+            (project_id, task),
+        ).fetchone()
+        return CapabilityRecord(**dict(row)) if row else None
+
     def receipt(self, project_id: str) -> dict[str, object]:
         payload = {"project": project_id, "capabilities": [asdict(record) for record in self.list(project_id)], "events": [dict(row) for row in self.db.execute("SELECT kind,detail,created_at FROM events WHERE project_id = ? ORDER BY id", (project_id,))]}
         # The digest is tamper-evident evidence for export/review; raw incident
