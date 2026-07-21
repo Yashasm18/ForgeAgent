@@ -2,8 +2,6 @@
 
 ForgeAgent helps AI coding agents and developer teams turn generated code into verified, reusable capabilities before it is allowed to run again.
 
-<!-- demo video goes here once recorded -->
-
 Here, an agent forges a capability once, verifies it, then reuses the proven version instead of regenerating it.
 
 ### Live terminal recording
@@ -12,22 +10,13 @@ Here, an agent forges a capability once, verifies it, then reuses the proven ver
 
 This is a real zero-API-key capture of [`python3 scripts/run_video_demo.py`](scripts/run_video_demo.py), generated from [`scripts/record_terminal_demo.tape`](scripts/record_terminal_demo.tape). It runs the actual Foundry, isolated proof, production approval, persistent reuse, reproduced failure/quarantine, inherited-regression repair, and v2 reuse paths. For the browser-first version of the same story, run `python3 main.py --serve` and open `http://127.0.0.1:8787/showcase`.
 
-```text
-TASK  Normalize inconsistent date formats in this import log
-GAP    I need 'date_format_normalizer', and I do not have it. I will build it.
-BUILD  Generated executable tool: date_format_normalizer
-TEST   Running mandatory sample test in isolated sandbox...
-VERIFY ✓  Sample test passed. REGISTER ✓  Toolkit now has 1 verified tool(s).
-RUN    Executing date_format_normalizer on task input...
-DONE   Result produced by verified tool.
-"job=ledger 2026-07-03; job=payout 2026-07-04; job=archive 2026-07-05"
+### What this proves
 
-TASK  Normalize inconsistent date formats in this import log
-REUSE ✓  Found verified tool: date_format_normalizer
-RUN    Executing date_format_normalizer on task input...
-DONE   Result produced by verified tool.
-"job=ledger 2026-07-03; job=payout 2026-07-04; job=archive 2026-07-05"
-```
+- **Build with evidence:** a missing capability earns entry to memory only after isolated proof, policy checks, and a clear contract.
+- **Reuse with confidence:** another agent can retrieve the trusted version instead of rebuilding the same tool from scratch.
+- **Improve safely:** a reproduced failure removes trust immediately; a repaired version earns it back by passing both its original proof and the retained regression.
+
+**Try the visual story yourself:** run `python3 main.py --serve`, then open `http://127.0.0.1:8787/showcase` for the browser walkthrough or `http://127.0.0.1:8787/judge` to inspect every action individually.
 
 ## The hook story
 
