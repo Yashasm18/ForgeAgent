@@ -4,8 +4,13 @@ data/capability_graph.json
 data/*.jsonl
 data/*.sqlite3
 data/judge_mode/
+data/*.lock
 .env
 .env.*
 *.key
 output/
 .playwright-cli/
+.tmp_media/
+.DS_Store
+MASTER.md
+ForageAgent-share.zip

@@ -8,9 +8,17 @@ from __future__ import annotations
 
 import json
 import hashlib
+import os
+import tempfile
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+
+try:  # POSIX covers the supported local and container execution environments.
+    import fcntl
+except ImportError:  # pragma: no cover - Windows is not part of the demo profile.
+    fcntl = None
 
 
 @dataclass(frozen=True)
@@ -32,8 +40,10 @@ class CapabilityGraph:
     def __init__(self, path: str | Path = "data/capability_graph.json"):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.path.exists():
-            self._write({"nodes": [], "edges": []})
+        self.lock_path = self.path.with_suffix(self.path.suffix + ".lock")
+        with self._exclusive_lock():
+            if not self.path.exists():
+                self._write({"nodes": [], "edges": []})
 
     def _read(self) -> dict[str, list[dict[str, object]]]:
         try:
@@ -42,9 +52,34 @@ class CapabilityGraph:
             raise RuntimeError("Capability graph is invalid JSON") from exc
 
     def _write(self, data: dict[str, object]) -> None:
-        temp = self.path.with_suffix(".tmp")
-        temp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        temp.replace(self.path)
+        """Atomically replace the graph after the caller holds the graph lock."""
+        descriptor, temp_name = tempfile.mkstemp(
+            dir=self.path.parent,
+            prefix=f".{self.path.name}.",
+            suffix=".tmp",
+        )
+        temp = Path(temp_name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                handle.write(json.dumps(data, indent=2, sort_keys=True) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            temp.replace(self.path)
+        finally:
+            temp.unlink(missing_ok=True)
+
+    @contextmanager
+    def _exclusive_lock(self):
+        """Serialize read-modify-write updates across simultaneous CLI runs."""
+        with self.lock_path.open("a+", encoding="utf-8") as handle:
+            if fcntl is None:  # pragma: no cover - see import note above.
+                yield
+                return
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
     @staticmethod
     def task_id(task: str) -> str:
@@ -56,17 +91,19 @@ class CapabilityGraph:
         return f"skill:{name}@v{version}"
 
     def add_node(self, node: Node) -> None:
-        data = self._read()
-        if not any(item["id"] == node.id for item in data["nodes"]):
-            data["nodes"].append(asdict(node))
-            self._write(data)
+        with self._exclusive_lock():
+            data = self._read()
+            if not any(item["id"] == node.id for item in data["nodes"]):
+                data["nodes"].append(asdict(node))
+                self._write(data)
 
     def add_edge(self, edge: Edge) -> None:
-        data = self._read()
-        record = asdict(edge)
-        if record not in data["edges"]:
-            data["edges"].append(record)
-            self._write(data)
+        with self._exclusive_lock():
+            data = self._read()
+            record = asdict(edge)
+            if record not in data["edges"]:
+                data["edges"].append(record)
+                self._write(data)
 
     def record_task_need(self, task: str, skill: str) -> str:
         task_id = self.task_id(task)
