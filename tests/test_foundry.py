@@ -10,8 +10,10 @@ from forgeagent.demo_tasks import RECORDED_ADVERSARIAL_EXAMPLE
 class SequenceGenerator:
     def __init__(self, proposals):
         self.proposals = iter(proposals)
+        self.tasks = []
 
     def propose(self, task, payload, repository_context=None):
+        self.tasks.append(task)
         return next(self.proposals)
 
 
@@ -103,10 +105,17 @@ class FoundryTests(unittest.TestCase):
         broken = ToolProposal("invoice_ids", "broken", "def run(payload):\n    return []\n", (({"text": "INV-1"}, ["INV-1"]),), "fixture")
         repaired = ToolProposal("invoice_ids", "repaired", "import re\ndef run(payload):\n    return re.findall(r'INV-\\d+', payload['text'])\n", (({"text": "INV-1"}, ["INV-1"]),), "fixture")
         with tempfile.TemporaryDirectory() as directory:
-            foundry = CapabilityFoundry(Path(directory) / "registry.json", root=directory, generator=SequenceGenerator([broken, repaired]))
+            generator = SequenceGenerator([broken, repaired])
+            foundry = CapabilityFoundry(Path(directory) / "registry.json", root=directory, generator=generator)
             outcome = foundry.run("Extract invoice IDs", {"text": "INV-1"})
             self.assertEqual(outcome["status"], "trusted")
             self.assertIn("repair_requested", [entry["status"] for entry in outcome["council"]])
+            self.assertEqual(len(generator.tasks), 2)
+            repair_task = generator.tasks[1]
+            self.assertIn("Prior candidate source:", repair_task)
+            self.assertIn("def run(payload):\n    return []", repair_task)
+            self.assertIn('"input": {"text": "INV-1"}', repair_task)
+            self.assertIn("Exact failed proof cases", repair_task)
 
     def test_adversarial_generator_case_blocks_promotion(self):
         proposal = ToolProposal(

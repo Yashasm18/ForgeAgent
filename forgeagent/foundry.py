@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -99,7 +100,7 @@ class CapabilityFoundry:
             failure = "; ".join(result["detail"] for result in report["results"] if not result["passed"])
             self._record_decision(decisions, capability, "planner", "repair_requested", f"Candidate failed proof: {failure}")
             proposal = self.generator.propose(
-                f"{task}\nRepair the prior candidate. Failure evidence: {failure}",
+                self._repair_task(task, proposal, report),
                 payload,
                 repository_context=repository_context,
             )
@@ -137,6 +138,45 @@ class CapabilityFoundry:
         if blueprint is None:
             raise RuntimeError("A configured live provider is required for an unknown capability. Use OpenAI, local Ollama, or choose a supported offline capability.")
         return ToolProposal(blueprint.name, blueprint.description, blueprint.source, ((blueprint.test_input, blueprint.expected_output),), "curated offline Foundry proposal")
+
+    @staticmethod
+    def _repair_task(task: str, proposal: ToolProposal, report: dict[str, object]) -> str:
+        """Give a live repair attempt the exact regression evidence it needs.
+
+        A summary such as "expected X, got Y" is insufficient for a model to
+        repair a parser: it loses the input that triggered the defect and the
+        candidate source that implemented it.  The repair request is bounded,
+        carries no new execution authority, and is sent only to an explicitly
+        configured live provider.
+        """
+        results = [
+            item for item in report.get("results", [])
+            if isinstance(item, dict) and item.get("category") not in {"policy", "coverage"}
+        ]
+        cases = [item for item in report.get("cases", []) if isinstance(item, dict)]
+        failures: list[dict[str, object]] = []
+        for case, result in zip(cases, results):
+            if result.get("passed"):
+                continue
+            failures.append({
+                "category": case.get("category"),
+                "input": case.get("input"),
+                "expected_output": case.get("expected_output"),
+                "rationale": case.get("rationale"),
+                "observed_failure": result.get("detail"),
+            })
+        evidence = json.dumps(failures, ensure_ascii=False, sort_keys=True)
+        source = proposal.source[:12000]
+        return (
+            f"{task}\n\n"
+            "Repair the prior candidate. Replace its source with a corrected, "
+            "deterministic implementation that satisfies every failing regression "
+            "case below. Do not merely describe the repair. Keep the run(payload) "
+            "contract and all ForgeAgent safety restrictions.\n\n"
+            f"Prior candidate name: {proposal.name}\n"
+            f"Prior candidate source:\n{source}\n\n"
+            f"Exact failed proof cases (input, expected output, and observed failure):\n{evidence}"
+        )
 
     def _repository_context(self, inspection: dict[str, object]) -> str | None:
         """Format only graph-matched definitions for a live proposal prompt.
