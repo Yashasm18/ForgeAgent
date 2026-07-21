@@ -298,9 +298,9 @@ class GPT56Generator:
             raise GeneratorError(f"GPT-5.6 request failed: HTTP {exc.code}{suffix}") from exc
         except urllib.error.URLError as exc:
             raise GeneratorError(f"GPT-5.6 request failed: {exc.reason}") from exc
-        text = body.get("output_text", "")
+        text = _responses_output_text(body)
         if not text:
-            raise GeneratorError("GPT-5.6 returned no text proposal")
+            raise GeneratorError("GPT-5.6 returned no structured text output")
         return text
 
 
@@ -485,6 +485,34 @@ def _decode_json_value(value: object) -> object:
     if not isinstance(value, str):
         raise ValueError("expected a JSON-encoded string")
     return json.loads(value)
+
+
+def _responses_output_text(body: object) -> str:
+    """Read text from either an SDK convenience field or raw Responses JSON.
+
+    The standard library client talks to ``/v1/responses`` directly.  SDKs
+    expose ``response.output_text`` as a convenience property, while raw HTTP
+    responses carry the same text in ``output[*].content[*]``.  Supporting both
+    forms keeps the provider independent of an SDK and avoids dropping a valid
+    structured response on the floor.
+    """
+    if not isinstance(body, dict):
+        return ""
+    convenience = body.get("output_text")
+    if isinstance(convenience, str) and convenience.strip():
+        return convenience
+
+    fragments: list[str] = []
+    for item in body.get("output", []):
+        if not isinstance(item, dict) or item.get("type") != "message":
+            continue
+        for content in item.get("content", []):
+            if not isinstance(content, dict) or content.get("type") != "output_text":
+                continue
+            value = content.get("text")
+            if isinstance(value, str):
+                fragments.append(value)
+    return "".join(fragments)
 
 
 def _parse_capability_match(text: str, allowed_names: set[str]) -> str | None:

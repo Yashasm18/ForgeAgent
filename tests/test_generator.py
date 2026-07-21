@@ -34,7 +34,19 @@ class StructuredOutputGeneratorTests(unittest.TestCase):
 
         def fake_urlopen(request, timeout):
             request_bodies.append(json.loads(request.data.decode("utf-8")))
-            return io.BytesIO(json.dumps({"output_text": json.dumps(next(responses))}).encode("utf-8"))
+            output = json.dumps(next(responses))
+            if len(request_bodies) == 1:
+                # Raw /v1/responses HTTP JSON nests text in output messages;
+                # output_text is an SDK convenience, not the only wire shape.
+                body = {
+                    "output": [{
+                        "type": "message",
+                        "content": [{"type": "output_text", "text": output}],
+                    }],
+                }
+            else:
+                body = {"output_text": output}
+            return io.BytesIO(json.dumps(body).encode("utf-8"))
 
         with patch("forgeagent.generator.urllib.request.urlopen", side_effect=fake_urlopen):
             generator = GPT56Generator(api_key="test-key")
