@@ -32,17 +32,17 @@ class OllamaGeneratorTests(unittest.TestCase):
                 "name": "order_id_extractor",
                 "description": "Extract ORD-<digits> order IDs.",
                 "source": "import re\ndef run(payload):\n    return re.findall(r'\\bORD-\\d+\\b', payload['text'])\n",
-                "tests": [{"input": {"text": "ORD-1"}, "expected_output": ["ORD-1"]}],
+                "tests": [{"input": "{\"text\": \"ORD-1\"}", "expected_output": "[\"ORD-1\"]"}],
                 "relationship": "SEPARATE: No relevant order-ID parser was supplied.",
             },
             {"capability_name": "date_format_normalizer"},
             {
                 "cases": [
-                    {"input": {"text": ""}, "expected_output": [], "rationale": "Empty input must be safe."},
-                    {"input": {"text": "ORD-001"}, "expected_output": ["ORD-001"], "rationale": "Leading zeroes must be preserved."},
+                    {"input": "{\"text\": \"\"}", "expected_output": "[]", "rationale": "Empty input must be safe."},
+                    {"input": "{\"text\": \"ORD-001\"}", "expected_output": "[\"ORD-001\"]", "rationale": "Leading zeroes must be preserved."},
                 ],
             },
-            {"steps": [{"id": "extract", "task": "Extract order IDs", "payload": {"text": "ORD-1"}, "depends_on": []}]},
+            {"steps": [{"id": "extract", "task": "Extract order IDs", "payload": "{\"text\": \"ORD-1\"}", "depends_on": []}]},
         ))
         request_bodies = []
 

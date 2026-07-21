@@ -49,6 +49,9 @@ class GeneratorError(RuntimeError):
 SYSTEM_PROMPT = """You generate one tiny, deterministic Python data tool for ForgeAgent.
 Return JSON only with keys name, description, source, tests, relationship.
 source must define exactly run(payload). tests is an array of objects with input and expected_output.
+Each test input and expected_output must be a JSON-encoded string, not a nested
+JSON value: for example, input='{"text":"INV-1"}' and
+expected_output='["INV-1"]'. ForgeAgent parses those strings before proof.
 The tool receives JSON-compatible payload and returns JSON-compatible data.
 No filesystem, network, subprocesses, reflection, eval, exec, globals, or imports outside:
 collections,csv,datetime,json,math,re,statistics,string.
@@ -58,18 +61,19 @@ of REUSE:, EXTEND:, or SEPARATE: and briefly explain the decision. Do not
 duplicate supplied code without a stated reason."""
 
 PLAN_PROMPT = """You are ForgeAgent's capability planner. Return JSON only:
-{"steps":[{"id":"short_id","task":"specific capability request","payload":{},"depends_on":[]}]}
+{"steps":[{"id":"short_id","task":"specific capability request","payload":"{\\"text\\":\\"example\\"}","depends_on":[]}]}
 Decompose the user request into the minimum dependency-ordered, independently
 verifiable capabilities. Do not invent external side effects. Every step payload
-must be JSON-compatible. Use at most five steps."""
+must be a JSON-encoded object string. Use at most five steps."""
 
 ADVERSARIAL_PROMPT = """You are ForgeAgent's adversarial proof author. Read the
 candidate source and its stated JSON contract. Return JSON only in this form:
-{"cases":[{"input":{},"expected_output":{},"rationale":"why this input
+{"cases":[{"input":"{\\"text\\":\\"...\\"}","expected_output":"[]","rationale":"why this input
 could expose a contract, correctness, or exception bug"}]}
-Propose 2 to 4 JSON-compatible inputs that are specifically likely to make the
-candidate return an incorrect result or raise unexpectedly. expected_output
-must be the correct JSON-compatible result required by the stated contract.
+Propose 2 to 4 JSON-encoded input and expected_output strings that are
+specifically likely to make the candidate return an incorrect result or raise
+unexpectedly. expected_output must decode to the correct JSON-compatible result
+required by the stated contract.
 Do not propose filesystem, network, reflection, dynamic execution, or any
 non-JSON input. Do not change the candidate source."""
 
@@ -80,9 +84,14 @@ intent. Return JSON only in this form: {"capability_name":"exact_name"} or
 {"capability_name":null}. Never invent a name, modify the catalog, propose new
 code, or select a capability unless the intent is a clear match."""
 
-# `input` and `expected_output` intentionally accept any JSON-compatible
-# value; the surrounding object shape is what Structured Outputs enforces.
-JSON_VALUE_SCHEMA: dict[str, object] = {}
+# Responses Structured Outputs requires a declared ``type`` at every schema
+# location. Arbitrary nested JSON objects cannot be represented there without
+# relaxing ``additionalProperties`` (which the strict API disallows), so test
+# values travel as JSON-encoded strings and are decoded before proof execution.
+JSON_ENCODED_VALUE_SCHEMA: dict[str, object] = {
+    "type": "string",
+    "description": "A JSON-encoded input or expected-output value.",
+}
 
 PROPOSAL_SCHEMA: dict[str, object] = {
     "type": "object",
@@ -103,8 +112,8 @@ PROPOSAL_SCHEMA: dict[str, object] = {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "input": JSON_VALUE_SCHEMA,
-                    "expected_output": JSON_VALUE_SCHEMA,
+                    "input": JSON_ENCODED_VALUE_SCHEMA,
+                    "expected_output": JSON_ENCODED_VALUE_SCHEMA,
                 },
                 "required": ["input", "expected_output"],
             },
@@ -136,7 +145,10 @@ PLAN_SCHEMA: dict[str, object] = {
                 "properties": {
                     "id": {"type": "string"},
                     "task": {"type": "string"},
-                    "payload": {"type": "object"},
+                    "payload": {
+                        "type": "string",
+                        "description": "A JSON-encoded object payload for this step.",
+                    },
                     "depends_on": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["id", "task", "payload", "depends_on"],
@@ -158,8 +170,8 @@ ADVERSARIAL_CASES_SCHEMA: dict[str, object] = {
                 "type": "object",
                 "additionalProperties": False,
                 "properties": {
-                    "input": JSON_VALUE_SCHEMA,
-                    "expected_output": JSON_VALUE_SCHEMA,
+                    "input": JSON_ENCODED_VALUE_SCHEMA,
+                    "expected_output": JSON_ENCODED_VALUE_SCHEMA,
                     "rationale": {"type": "string"},
                 },
                 "required": ["input", "expected_output", "rationale"],
@@ -273,7 +285,17 @@ class GPT56Generator:
             with urllib.request.urlopen(request, timeout=45) as response:
                 body = json.load(response)
         except urllib.error.HTTPError as exc:
-            raise GeneratorError(f"GPT-5.6 request failed: HTTP {exc.code}") from exc
+            # The response body contains the actionable API validation message
+            # (for example, an unavailable model or unsupported schema).  It
+            # never contains the bearer token, but keep it bounded so a remote
+            # error cannot flood a CLI or audit surface.
+            try:
+                error_body = json.loads(exc.read().decode("utf-8", "replace"))
+                detail = str(error_body.get("error", {}).get("message", "")).strip()
+            except (ValueError, AttributeError):
+                detail = ""
+            suffix = f": {detail[:800]}" if detail else ""
+            raise GeneratorError(f"GPT-5.6 request failed: HTTP {exc.code}{suffix}") from exc
         except urllib.error.URLError as exc:
             raise GeneratorError(f"GPT-5.6 request failed: {exc.reason}") from exc
         text = body.get("output_text", "")
@@ -410,7 +432,7 @@ def create_live_generator(
 def _parse_proposal(text: str, provenance: str) -> ToolProposal:
     try:
         data = json.loads(text)
-        tests = tuple((item["input"], item["expected_output"]) for item in data["tests"])
+        tests = tuple((_decode_json_value(item["input"]), _decode_json_value(item["expected_output"])) for item in data["tests"])
         if not tests:
             raise ValueError("no tests")
         relationship = data["relationship"]
@@ -427,7 +449,13 @@ def _parse_plan(text: str, provider_label: str) -> list[dict[str, object]]:
         steps = data["steps"]
         if not isinstance(steps, list) or not steps:
             raise ValueError("empty plan")
-        return steps
+        normalized_steps = []
+        for step in steps:
+            payload = _decode_json_value(step["payload"])
+            if not isinstance(payload, dict):
+                raise ValueError("step payload must decode to an object")
+            normalized_steps.append({**step, "payload": payload})
+        return normalized_steps
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise GeneratorError(f"{provider_label} plan was not valid ForgeAgent JSON") from exc
 
@@ -438,7 +466,10 @@ def _parse_adversarial_cases(text: str) -> list[ProofCase]:
         raw_cases = data["cases"]
         if not isinstance(raw_cases, list) or not 2 <= len(raw_cases) <= 4:
             raise ValueError("expected 2-4 adversarial cases")
-        cases = [ProofCase("adversarial", item["input"], item["expected_output"], item["rationale"]) for item in raw_cases]
+        cases = [
+            ProofCase("adversarial", _decode_json_value(item["input"]), _decode_json_value(item["expected_output"]), item["rationale"])
+            for item in raw_cases
+        ]
         for case in cases:
             json.dumps(case.input)
             json.dumps(case.expected_output)
@@ -447,6 +478,13 @@ def _parse_adversarial_cases(text: str) -> list[ProofCase]:
         return cases
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise GeneratorError("Live generator adversarial proof cases were not valid ForgeAgent JSON") from exc
+
+
+def _decode_json_value(value: object) -> object:
+    """Decode the typed transport used by strict Structured Outputs."""
+    if not isinstance(value, str):
+        raise ValueError("expected a JSON-encoded string")
+    return json.loads(value)
 
 
 def _parse_capability_match(text: str, allowed_names: set[str]) -> str | None:

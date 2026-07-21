@@ -19,14 +19,14 @@ class StructuredOutputGeneratorTests(unittest.TestCase):
                 "name": "invoice_id_extractor",
                 "description": "Extract invoice IDs from support logs.",
                 "source": "def run(payload):\n    return []\n",
-                "tests": [{"input": {"text": "INV-1"}, "expected_output": ["INV-1"]}],
+                "tests": [{"input": "{\"text\": \"INV-1\"}", "expected_output": "[\"INV-1\"]"}],
                 "relationship": "EXTEND: Reuse the matched invoice parser's identifier pattern while adding log extraction.",
             },
             {"capability_name": "invoice_id_extractor"},
             {
                 "cases": [
-                    {"input": {"text": ""}, "expected_output": [], "rationale": "Empty logs must not raise."},
-                    {"input": {"text": "INV-000"}, "expected_output": ["INV-000"], "rationale": "Leading zeroes must be preserved."},
+                    {"input": "{\"text\": \"\"}", "expected_output": "[]", "rationale": "Empty logs must not raise."},
+                    {"input": "{\"text\": \"INV-000\"}", "expected_output": "[\"INV-000\"]", "rationale": "Leading zeroes must be preserved."},
                 ],
             },
         ))
