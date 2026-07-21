@@ -10,6 +10,10 @@ Here, an agent forges a capability once, verifies it, then reuses the proven ver
 
 This is a real zero-API-key capture of [`python3 scripts/run_video_demo.py`](scripts/run_video_demo.py), generated from [`scripts/record_terminal_demo.tape`](scripts/record_terminal_demo.tape). It runs the actual Foundry, isolated proof, production approval, persistent reuse, reproduced failure/quarantine, inherited-regression repair, and v2 reuse paths. For the browser-first version of the same story, run `python3 main.py --serve` and open `http://127.0.0.1:8787/showcase`.
 
+### Verified GPT-5.6 Terra run
+
+On July 21, 2026, a live OpenAI `gpt-5.6-terra` Foundry run created the previously missing `extract_invoice_ids` capability from an explicit ASCII-only contract. Its first two candidates were rejected with 5 and 3 proof failures; the live adversarial pass supplied 4, then 3, then 2 targeted cases across the repair loop. The repaired `extract_invoice_ids@v2` passed normal, edge, three contract, and two adversarial cases at trust score 100; an exact later request returned `status: "reused"` with no new model generation. This is separate from the hosted and offline demos, which remain deliberately key-free.
+
 ### What this proves
 
 - **Build with evidence:** a missing capability earns entry to memory only after isolated proof, policy checks, and a clear contract.
@@ -42,7 +46,7 @@ All figures below were generated locally without an API key on July 20, 2026.
 
 | Evidence | Measured result | Source command |
 | --- | --- | --- |
-| Regression suite | 86 tests passed (6 optional-policy tests skipped when PyYAML is absent) | `python3 -m unittest discover -s tests -v` |
+| Regression suite | 87 tests passed (6 optional-policy tests skipped when PyYAML is absent) | `python3 -m unittest discover -s tests -v` |
 | Sandbox security regressions | 4/4 passed; import-alias, dunder-attribute, and dynamic-`getattr` escapes remain blocked | `python3 -m unittest tests.test_sandbox_security -v` |
 | Trust-gate benchmark | 8/8 cases passed; 7/7 attack patterns blocked | `python3 main.py --benchmark` |
 | Evaluation arena | 50/50 cases passed; 10/10 unsafe proposals rejected | `python3 main.py --evaluate` |
