@@ -205,7 +205,7 @@ let `gpt-5.6-terra` plan and propose an unknown capability. `--repo-graph`
 exports the repository graph, `--evaluate` runs 50 measured cases, and `--mcp`
 starts the stdio MCP server for compatible coding agents.
 
-### Offline intelligence (no API key)
+### Offline intelligence (no API key needed)
 
 ForgeAgent is useful without credits, but it is deliberately bounded rather
 than a pretend local replacement for GPT. It performs deterministic semantic
