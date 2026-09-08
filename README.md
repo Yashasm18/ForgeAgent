@@ -1,4 +1,4 @@
-# ForgeAgent — verified skill memory for AI agents
+# ForgeAgent -- verified skill memory for AI agents
 
 ForgeAgent helps AI coding agents and developer teams turn generated code into verified, reusable capabilities before it is allowed to run again.
 
