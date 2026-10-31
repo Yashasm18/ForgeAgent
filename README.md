@@ -4,7 +4,7 @@ ForgeAgent helps AI coding agents and developer teams turn generated code into v
 
 Here, an agent forges a capability once, verifies it, then reuses the proven version instead of regenerating it.
 
-### Live terminal recording
+### Live terminal recording.
 
 ![Real ForgeAgent terminal run: forge, verify, reuse](docs/forgeagent-terminal-demo.gif)
 
