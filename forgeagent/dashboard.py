@@ -193,11 +193,9 @@ def create_server(
             elif request.path == "/api/pending":
                 body, content_type = json.dumps(pending_payload(path)).encode(), "application/json"
             elif request.path == "/api/events":
-                audit_path = path.parent / "audit_log.jsonl"
-                try:
-                    rows = [json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-                except (FileNotFoundError, json.JSONDecodeError):
-                    rows = []
+                # Share the per-line tolerant parser so one corrupt or partially
+                # written line cannot blank the whole evidence trail.
+                rows = audit_updates(path.parent / "audit_log.jsonl")["events"]
                 body, content_type = json.dumps({"events": list(reversed(rows[-12:]))}).encode(), "application/json"
             elif request.path == "/api/audit-log":
                 raw_since = parse_qs(request.query).get("since", ["0"])[0]

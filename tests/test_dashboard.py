@@ -47,6 +47,24 @@ class DashboardAuditEndpointTests(unittest.TestCase):
             {"event", "capability", "detail", "outcome", "created_at"},
         )
 
+    def test_events_endpoint_skips_corrupt_and_partial_lines(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            registry = root / "tool_registry.json"
+            audit = AuditLog(root / "audit_log.jsonl")
+            audit.record("council_planner", "invoice_ids", "Mapped the request.", "complete")
+            with (root / "audit_log.jsonl").open("a", encoding="utf-8") as handle:
+                handle.write("{not json}\n")
+                handle.write("42\n")
+            audit.record("council_evaluator", "invoice_ids", "Proof passed.", "passed")
+            with (root / "audit_log.jsonl").open("a", encoding="utf-8") as handle:
+                handle.write('{"event": "council_governor", "capa')
+            payload = self._get_json(create_server(registry, port=0), "/api/events")
+
+        self.assertEqual([event["event"] for event in payload["events"]], [
+            "council_evaluator", "council_planner",
+        ])
+
     def test_tools_endpoint_uses_one_persisted_proof_summary_for_cards_and_total(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
